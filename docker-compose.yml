@@ -1,0 +1,17 @@
+services:
+  redchef:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin
+      PORT: "8080"
+      DB_PATH: /app/redchef.db
+    volumes:
+      - redchef_uploads:/app/uploads
+      - redchef_data:/app/data
+
+volumes:
+  redchef_uploads:
+  redchef_data:

@@ -1,0 +1,15 @@
+# Binary
+redchef
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,163 @@
+// RedChef - Admin Client
+
+const API = {
+  login: '/api/admin/login',
+  logout: '/api/admin/logout',
+  posts: '/api/admin/posts',
+  upload: '/api/admin/upload',
+};
+
+let currentUser = null;
+
+// Check existing auth on load
+async function checkAuth() {
+  try {
+    const res = await fetch(API.posts);
+    if (res.ok) {
+      showDashboard();
+      return;
+    }
+  } catch (_) {}
+  showLogin();
+}
+
+// Login
+async function handleLogin(e) {
+  e.preventDefault();
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const error = document.getElementById('login-error');
+
+  try {
+    const res = await fetch(API.login, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      error.textContent = data.error || 'Login failed';
+      return;
+    }
+
+    showDashboard();
+  } catch (err) {
+    error.textContent = 'Network error';
+  }
+}
+
+// Logout
+async function handleLogout() {
+  await fetch(API.logout, { method: 'POST' });
+  showLogin();
+}
+
+// Show login form
+function showLogin() {
+  document.getElementById('login-section').style.display = 'flex';
+  document.getElementById('dashboard-section').style.display = 'none';
+}
+
+// Show dashboard
+function showDashboard() {
+  document.getElementById('login-section').style.display = 'none';
+  document.getElementById('dashboard-section').style.display = 'block';
+  loadPosts();
+}
+
+// Upload
+async function handleUpload(e) {
+  e.preventDefault();
+  const form = e.target;
+  const formData = new FormData(form);
+  const status = document.getElementById('upload-status');
+
+  status.textContent = 'Uploading...';
+  status.style.color = '#F5C518';
+
+  try {
+    const res = await fetch(API.upload, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      status.textContent = data.error || 'Upload failed';
+      status.style.color = '#D42B2B';
+      return;
+    }
+
+    status.textContent = 'Uploaded successfully!';
+    status.style.color = '#4CAF50';
+    form.reset();
+    loadPosts();
+  } catch (err) {
+    status.textContent = 'Network error';
+    status.style.color = '#D42B2B';
+  }
+}
+
+// Load posts
+async function loadPosts() {
+  const tbody = document.getElementById('posts-table-body');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#888;">Loading...</td></tr>';
+
+  try {
+    const res = await fetch(API.posts);
+    if (!res.ok) throw new Error('Failed');
+    const posts = await res.json();
+
+    if (posts.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#888;">No posts yet. Upload something!</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = posts.map(post => `
+      <tr>
+        <td>
+          ${post.media_type === 'video'
+            ? `<video src="/uploads/${post.filename}" style="width:80px;height:50px;object-fit:cover;border-radius:4px;" preload="metadata"></video>`
+            : `<img src="/uploads/${post.filename}" style="width:80px;height:50px;object-fit:cover;border-radius:4px;" loading="lazy">`
+          }
+        </td>
+        <td>${escapeHtml(post.title)}</td>
+        <td><span class="type-badge type-${post.media_type}">${post.media_type}</span></td>
+        <td>${post.locked ? '🔒 Yes' : '🔓 No'}</td>
+        <td>${new Date(post.created_at).toLocaleDateString()}</td>
+        <td><button class="delete-btn" onclick="deletePost(${post.id})">Delete</button></td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#D42B2B;">Failed to load posts</td></tr>';
+  }
+}
+
+// Delete post
+async function deletePost(id) {
+  if (!confirm('Delete this post? This cannot be undone.')) return;
+
+  try {
+    const res = await fetch(`${API.posts}/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed');
+    loadPosts();
+  } catch (err) {
+    alert('Failed to delete post');
+  }
+}
+
+// Helpers
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('login-form').addEventListener('submit', handleLogin);
+  document.getElementById('upload-form').addEventListener('submit', handleUpload);
+  document.getElementById('logout-btn').addEventListener('click', handleLogout);
+  checkAuth();
+});

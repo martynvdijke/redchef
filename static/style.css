@@ -1,0 +1,445 @@
+/* ========================================
+   RedChef - As Seen On TV Kitsch Theme
+   ======================================== */
+
+:root {
+  --red: #D42B2B;
+  --red-dark: #A82020;
+  --copper: #C76B3A;
+  --copper-light: #E08A5A;
+  --gold: #F5C518;
+  --gold-dark: #D4A800;
+  --black: #1A1A1A;
+  --black-light: #2A2A2A;
+  --white: #FFF8F0;
+  --gray: #888;
+  --gray-light: #DDD;
+  --shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  background: var(--black);
+  color: var(--white);
+  min-height: 100vh;
+}
+
+/* ========== TYPOGRAPHY ========== */
+
+h1, h2, h3 {
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+h1 {
+  font-size: 3rem;
+  line-height: 1.1;
+}
+
+h2 {
+  font-size: 1.8rem;
+  color: var(--gold);
+}
+
+/* ========== HEADER / HERO ========== */
+
+.site-header {
+  background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%);
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 4px solid var(--gold);
+  box-shadow: 0 4px 15px rgba(212,43,43,0.4);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.site-header .logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--white);
+}
+
+.site-header .logo-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.site-header .logo-text {
+  font-size: 1.4rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+}
+
+.site-header .logo-text span {
+  color: var(--gold);
+}
+
+.hero {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: radial-gradient(ellipse at center, var(--black-light) 0%, var(--black) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: "★ AS SEEN ON TV ★";
+  position: absolute;
+  top: 20px;
+  right: -30px;
+  background: var(--gold);
+  color: var(--black);
+  padding: 6px 40px;
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+  transform: rotate(45deg);
+  box-shadow: 0 2px 10px rgba(245,197,24,0.5);
+  z-index: 1;
+}
+
+.hero-chef {
+  font-size: 5rem;
+  margin-bottom: 0.5rem;
+  filter: drop-shadow(0 0 20px rgba(245,197,24,0.3));
+}
+
+.hero h1 {
+  font-size: 2.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.hero h1 .gold {
+  color: var(--gold);
+}
+
+.hero .tagline {
+  font-size: 1.1rem;
+  color: var(--copper-light);
+  font-style: italic;
+  letter-spacing: 1px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.hero .badge-row {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-block;
+  background: var(--black-light);
+  border: 2px solid var(--gold);
+  border-radius: 50%;
+  width: 90px;
+  height: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  font-weight: 900;
+  color: var(--gold);
+  line-height: 1.2;
+}
+
+.badge .big {
+  font-size: 1.4rem;
+}
+
+/* ========== CONTENT GRID ========== */
+
+.section-title {
+  padding: 2rem 2rem 1rem;
+  font-size: 1.3rem;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  padding: 0 2rem 3rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--black-light);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #333;
+  transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow);
+}
+
+.card-image {
+  width: 100%;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  display: block;
+  background: #333;
+}
+
+.card-image-placeholder {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+}
+
+.card-body {
+  padding: 16px;
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.card-desc {
+  font-size: 0.85rem;
+  color: var(--gray);
+  line-height: 1.4;
+}
+
+.card-date {
+  font-size: 0.75rem;
+  color: #555;
+  margin-top: 8px;
+}
+
+/* ========== LOCKED OVERLAY ========== */
+
+.card-locked {
+  position: relative;
+}
+
+.card-locked .card-image {
+  filter: blur(20px);
+  transform: scale(1.1);
+  user-select: none;
+  pointer-events: none;
+}
+
+.card-locked-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.5);
+  gap: 12px;
+}
+
+.card-locked-overlay .lock-icon {
+  font-size: 2.5rem;
+  opacity: 0.8;
+}
+
+.card-locked-overlay .price-tag {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--gold);
+  text-shadow: 0 2px 10px rgba(245,197,24,0.4);
+}
+
+.unlock-btn {
+  background: var(--gold);
+  color: var(--black);
+  border: none;
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 15px rgba(245,197,24,0.3);
+}
+
+.unlock-btn:hover {
+  background: var(--gold-dark);
+  box-shadow: 0 6px 20px rgba(245,197,24,0.5);
+  transform: scale(1.05);
+}
+
+.unlock-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ========== PAYMENT TOAST ========== */
+
+.toast-container {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast {
+  background: var(--black-light);
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  padding: 16px 28px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+  animation: slideUp 0.4s ease;
+  max-width: 90vw;
+}
+
+.toast-icon {
+  font-size: 1.5rem;
+}
+
+.toast-text {
+  font-size: 0.9rem;
+}
+
+.toast-text .amount {
+  color: var(--gold);
+  font-weight: 900;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========== PROCESSING OVERLAY ========== */
+
+.processing-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  animation: fadeIn 0.3s ease;
+}
+
+.processing-overlay .spinner {
+  font-size: 3rem;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+.processing-overlay .processing-text {
+  font-size: 1.2rem;
+  color: var(--gold);
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ========== EMPTY STATE ========== */
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--gray);
+}
+
+.empty-state .big-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.empty-state p {
+  font-size: 1.1rem;
+}
+
+/* ========== FOOTER ========== */
+
+.site-footer {
+  text-align: center;
+  padding: 2rem;
+  color: #444;
+  font-size: 0.8rem;
+  border-top: 1px solid #222;
+}
+
+.site-footer .disclaimer {
+  font-style: italic;
+  color: #555;
+  margin-top: 4px;
+}
+
+/* ========== RESPONSIVE ========== */
+
+@media (max-width: 768px) {
+  h1 { font-size: 2rem; }
+  .hero h1 { font-size: 1.8rem; }
+  .hero-chef { font-size: 3.5rem; }
+  .content-grid {
+    grid-template-columns: 1fr;
+    padding: 0 1rem 2rem;
+    gap: 16px;
+  }
+  .site-header {
+    padding: 0.8rem 1rem;
+  }
+  .site-header .logo-text {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero h1 { font-size: 1.4rem; }
+  .badge { width: 70px; height: 70px; font-size: 0.6rem; }
+  .badge .big { font-size: 1.1rem; }
+}
