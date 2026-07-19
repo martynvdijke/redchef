@@ -62,15 +62,15 @@ CREATE TABLE sessions (
 ```
 
 - Default admin user seeded via `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars on first startup.
-- Posts with `locked=1` show only thumbnails; full media requires a click-through "Subscribe" overlay.
+- Posts with `locked=1` show only thumbnails; full media is revealed when the user clicks "Pay 5¢" — a parody microtransaction that charges nothing.
 
 ## API Endpoints
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | GET | `/api/posts` | None | Public feed — returns posts list with thumbnail URLs + locked status |
-| GET | `/api/posts/:id` | Optional | Full post details; locked content requires subscriber token |
-| POST | `/api/subscribe` | None | Click-through gate — sets "subscriber" cookie |
+| GET | `/api/posts/:id` | None | Full post details, always returns all data (gate is client-side) |
+| POST | `/api/unlock` | None | Records that user "paid 5¢" — sets cookie tracking unlocked posts |
 | POST | `/api/admin/login` | None | Username+password → admin session cookie |
 | POST | `/api/admin/upload` | Admin | Multipart upload: file + title + description |
 | GET | `/api/admin/posts` | Admin | List all posts with full details |
@@ -89,8 +89,9 @@ CREATE TABLE sessions (
 ### Fan Page (`/`)
 - Hero section: The Chef (tiny appliance) with dramatic pose, "THE 5 MINUTE RED COPPER CHEF" title
 - Content grid: 3-column card layout, each showing thumbnail + title
-- Locked cards: blurred preview + "🔒 Subscribe for $5.99/mo" overlay button
-- Subscribe flow: click → sets cookie → page reloads showing all content
+- Locked cards: blurred preview + "🔒 Pay 5¢ to see this" button overlay
+- Unlock flow: click "Pay 5¢" → comedic "Processing payment..." animation → "Thank you! Your card has been charged $0.05" (mock toast) → content slides open in-place
+- Unlocked state is tracked client-side via cookie (list of unlocked post IDs)
 
 ### Admin Login (`/admin/`)
 - Centered login form with Chef branding
