@@ -14,6 +14,8 @@ import (
 //go:embed static/*
 var staticFiles embed.FS
 
+var Version = "0.1.0"
+
 func main() {
 	// Configuration from environment
 	port := getEnv("PORT", "8080")
