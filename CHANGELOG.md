@@ -1,3 +1,10 @@
+## [1.1.3](https://github.com/martynvdijke/redchef/compare/v1.1.2...v1.1.3) (2026-07-20)
+
+
+### Bug Fixes
+
+* switch to alpine base image for healthcheck support and embed persistent paths in code ([d226d87](https://github.com/martynvdijke/redchef/commit/d226d87bac0034de72170b4bee93d8a565666f44))
+
 ## [1.1.2](https://github.com/martynvdijke/redchef/compare/v1.1.1...v1.1.2) (2026-07-20)
 
 
