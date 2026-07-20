@@ -2,11 +2,11 @@ services:
   redchef:
     build: .
     ports:
-      - "8080:8080"
+      - "6270:6270"
     environment:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: admin
-      PORT: "8080"
+      PORT: "6270"
       DB_PATH: /app/redchef.db
     volumes:
       - redchef_uploads:/app/uploads

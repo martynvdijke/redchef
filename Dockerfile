@@ -11,7 +11,7 @@ FROM scratch
 WORKDIR /app
 COPY --from=builder /build/redchef .
 COPY --from=builder /build/static ./static
-EXPOSE 8080
+EXPOSE 6270
 VOLUME ["/app/uploads"]
-ENV PORT=8080 DB_PATH=/app/redchef.db
+ENV PORT=6270 DB_PATH=/app/redchef.db
 ENTRYPOINT ["/app/redchef"]
