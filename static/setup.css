@@ -1,0 +1,158 @@
+/* RedChef — Setup Page */
+
+:root {
+  --red: #D42B2B;
+  --red-dark: #A82020;
+  --copper: #C76B3A;
+  --copper-light: #E08A5A;
+  --gold: #F5C518;
+  --gold-dark: #D4A800;
+  --black: #1A1A1A;
+  --black-light: #2A2A2A;
+  --white: #FFF8F0;
+  --gray: #888;
+  --gray-light: #DDD;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 50%, #1A1A1A 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.setup-page {
+  width: 100%;
+  max-width: 440px;
+}
+
+.setup-card {
+  background: var(--black-light);
+  border: 1px solid #333;
+  border-radius: 20px;
+  padding: 3rem 2.5rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.setup-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.setup-icon {
+  font-size: 4rem;
+  margin-bottom: 0.5rem;
+}
+
+.setup-header h1 {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--white);
+  margin-bottom: 0.3rem;
+}
+
+.setup-subtitle {
+  color: var(--gray);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--gray);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid #444;
+  background: #222;
+  color: var(--white);
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--copper);
+  box-shadow: 0 0 0 3px rgba(199,107,58,0.15);
+}
+
+.form-group input::placeholder {
+  color: #555;
+}
+
+.btn-setup {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--red), var(--red-dark));
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 0.5rem;
+}
+
+.btn-setup:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(212,43,43,0.4);
+}
+
+.btn-setup:active {
+  transform: translateY(0);
+}
+
+.btn-setup:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-loading {
+  font-size: 0.95rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.setup-error {
+  color: var(--red);
+  font-size: 0.85rem;
+  margin-top: 1rem;
+  text-align: center;
+  min-height: 1.5rem;
+}
+
+.setup-footer {
+  text-align: center;
+  color: #555;
+  font-size: 0.75rem;
+  margin-top: 1.5rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 480px) {
+  .setup-card { padding: 2rem 1.5rem; }
+  .setup-icon { font-size: 3rem; }
+  .setup-header h1 { font-size: 1.3rem; }
+}

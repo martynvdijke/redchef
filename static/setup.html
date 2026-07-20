@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Red Copper Chef — Setup</title>
+  <link rel="stylesheet" href="/setup.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍳</text></svg>">
+</head>
+<body>
+  <div class="setup-page">
+    <div class="setup-card">
+      <div class="setup-header">
+        <div class="setup-icon">👨‍🍳</div>
+        <h1>Welcome, Chef!</h1>
+        <p class="setup-subtitle">Let's set up your admin account to start cooking up content.</p>
+      </div>
+
+      <form id="setup-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" placeholder="Choose a username" autocomplete="username" required>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="At least 4 characters" autocomplete="new-password" minlength="4" required>
+        </div>
+
+        <div class="form-group">
+          <label for="confirm-password">Confirm Password</label>
+          <input type="password" id="confirm-password" placeholder="Repeat your password" autocomplete="new-password" required>
+        </div>
+
+        <button type="submit" class="btn-setup" id="btn-setup">
+          <span class="btn-text">Create Admin Account</span>
+          <span class="btn-loading" style="display:none;">⏳ Creating account...</span>
+        </button>
+
+        <div class="setup-error" id="setup-error"></div>
+      </form>
+
+      <p class="setup-footer">
+        This is the first and only admin account. Keep these credentials safe.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('setup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const error = document.getElementById('setup-error');
+      const btn = document.getElementById('btn-setup');
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm-password').value;
+
+      error.textContent = '';
+
+      if (!username) { error.textContent = 'Username is required'; return; }
+      if (!password || password.length < 4) { error.textContent = 'Password must be at least 4 characters'; return; }
+      if (password !== confirm) { error.textContent = 'Passwords do not match'; return; }
+
+      btn.disabled = true;
+      btn.querySelector('.btn-text').style.display = 'none';
+      btn.querySelector('.btn-loading').style.display = 'inline';
+
+      try {
+        const res = await fetch('/api/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, confirm_password: confirm }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          error.textContent = data.error || 'Setup failed';
+          btn.disabled = false;
+          btn.querySelector('.btn-text').style.display = 'inline';
+          btn.querySelector('.btn-loading').style.display = 'none';
+          return;
+        }
+
+        // Redirect to admin
+        window.location.href = data.redirect || '/admin.html';
+      } catch (err) {
+        error.textContent = 'Network error — is the server running?';
+        btn.disabled = false;
+        btn.querySelector('.btn-text').style.display = 'inline';
+        btn.querySelector('.btn-loading').style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>

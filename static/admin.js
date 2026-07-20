@@ -6,12 +6,25 @@ const API = {
   posts: '/api/admin/posts',
   upload: '/api/admin/upload',
   settings: '/api/admin/settings/analytics',
+  setupStatus: '/api/setup/status',
 };
 
 let currentUser = null;
 
 // Check existing auth on load
 async function checkAuth() {
+  // First check if setup is needed
+  try {
+    const setupRes = await fetch(API.setupStatus);
+    if (setupRes.ok) {
+      const status = await setupRes.json();
+      if (status.needs_setup) {
+        window.location.href = '/setup';
+        return;
+      }
+    }
+  } catch (_) {}
+
   try {
     const res = await fetch(API.posts);
     if (res.ok) {

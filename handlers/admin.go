@@ -174,6 +174,100 @@ func AdminUpdateAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(settings)
 }
 
+// ── Setup (first-run admin creation) ──
+
+func Setup(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username        string `json:"username"`
+		Password        string `json:"password"`
+		ConfirmPassword string `json:"confirm_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Check if admin already exists
+	hasUsers, err := db.HasUsers()
+	if err != nil {
+		http.Error(w, `{"error":"failed to check setup status"}`, http.StatusInternalServerError)
+		return
+	}
+	if hasUsers {
+		http.Error(w, `{"error":"admin already configured"}`, http.StatusForbidden)
+		return
+	}
+
+	// Validate
+	if req.Username == "" {
+		http.Error(w, `{"error":"username is required"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Password == "" {
+		http.Error(w, `{"error":"password is required"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Password) < 4 {
+		http.Error(w, `{"error":"password must be at least 4 characters"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Password != req.ConfirmPassword {
+		http.Error(w, `{"error":"passwords do not match"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Create user
+	if err := db.CreateUser(req.Username, req.Password); err != nil {
+		http.Error(w, `{"error":"failed to create admin user"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Auto-login: get user ID
+	userID, _, err := db.GetUserByUsername(req.Username)
+	if err != nil {
+		http.Error(w, `{"error":"failed to verify admin user"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Create session
+	session, err := db.CreateSession(userID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to create session"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Set session cookie (same name used by Login handler)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "admin_token",
+		Value:    session.Token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   86400,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":       true,
+		"token":    session.Token,
+		"redirect": "/admin.html",
+	})
+}
+
+// ── Setup status check ──
+
+func SetupStatus(w http.ResponseWriter, r *http.Request) {
+	hasUsers, err := db.HasUsers()
+	if err != nil {
+		http.Error(w, `{"error":"failed to check"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{
+		"needs_setup": !hasUsers,
+	})
+}
+
 // Simple ID generator (not crypto, just for filenames)
 var idCounter int64
 

@@ -106,23 +106,34 @@ func migrate() error {
 	return err
 }
 
-func SeedAdmin(username, password string) error {
+func HasUsers() (bool, error) {
 	var count int
 	err := DB.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if count > 0 {
-		return nil
-	}
+	return count > 0, nil
+}
 
+func CreateUser(username, password string) error {
 	hash, err := hashPassword(password)
 	if err != nil {
 		return err
 	}
-
 	_, err = DB.Exec("INSERT INTO users (username, password_hash) VALUES (?, ?)", username, hash)
 	return err
+}
+
+func SeedAdmin(username, password string) error {
+	has, err := HasUsers()
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+
+	return CreateUser(username, password)
 }
 
 func GetUserByUsername(username string) (int64, string, error) {

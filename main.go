@@ -11,6 +11,8 @@ import (
 	"redchef/handlers"
 )
 
+var staticHandler http.Handler
+
 //go:embed static/*
 var staticFiles embed.FS
 
@@ -28,9 +30,11 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// Seed default admin user
-	if err := db.SeedAdmin(adminUser, adminPass); err != nil {
-		log.Fatalf("Failed to seed admin user: %v", err)
+	// Seed admin user from env vars (if ADMIN_USERNAME or ADMIN_PASSWORD explicitly set)
+	if os.Getenv("ADMIN_USERNAME") != "" || os.Getenv("ADMIN_PASSWORD") != "" {
+		if err := db.SeedAdmin(adminUser, adminPass); err != nil {
+			log.Fatalf("Failed to seed admin user: %v", err)
+		}
 	}
 
 	// Set up routes
@@ -40,6 +44,10 @@ func main() {
 	uploadDir := getEnv("UPLOAD_DIR", "/app/media")
 	uploadFS := http.FileServer(http.Dir(uploadDir))
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", uploadFS))
+
+	// Setup (first-run, no auth)
+	mux.HandleFunc("POST /api/setup", handlers.Setup)
+	mux.HandleFunc("GET /api/setup/status", handlers.SetupStatus)
 
 	// Public API
 	mux.HandleFunc("GET /api/posts", handlers.ListPosts)
@@ -65,7 +73,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create static sub filesystem: %v", err)
 	}
-	staticHandler := http.FileServer(http.FS(staticSub))
+	staticHandler = http.FileServer(http.FS(staticSub))
+
+	// Setup page: redirect to admin if admin exists, serve setup.html if not
+	mux.HandleFunc("GET /setup", func(w http.ResponseWriter, r *http.Request) {
+		hasUsers, err := db.HasUsers()
+		if err == nil && hasUsers {
+			http.Redirect(w, r, "/admin.html", http.StatusFound)
+			return
+		}
+		// serve setup.html from embedded files
+		r.URL.Path = "/setup.html"
+		staticHandler.ServeHTTP(w, r)
+	})
 
 	mux.Handle("GET /", staticHandler)
 
