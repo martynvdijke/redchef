@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/martynvdijke/redchef/compare/v1.3.1...v1.4.0) (2026-07-20)
+
+
+### Features
+
+* lock toggle, upload progress bar, admin nav link, fix upload path default ([580431d](https://github.com/martynvdijke/redchef/commit/580431d38cab6dc6b150b55ffbd0cad11ac0f805))
+
 ## [1.3.1](https://github.com/martynvdijke/redchef/compare/v1.3.0...v1.3.1) (2026-07-20)
 
 
