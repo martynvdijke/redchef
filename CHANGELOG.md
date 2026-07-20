@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/martynvdijke/redchef/compare/v1.4.0...v1.5.0) (2026-07-20)
+
+
+### Features
+
+* upload progress bar and lock toggle UI ([c9d181e](https://github.com/martynvdijke/redchef/commit/c9d181eaba2b775911c0b607b48a9fa9a07265ba))
+
 # [1.4.0](https://github.com/martynvdijke/redchef/compare/v1.3.1...v1.4.0) (2026-07-20)
 
 
