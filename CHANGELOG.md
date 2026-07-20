@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/martynvdijke/redchef/compare/v1.6.1...v1.7.0) (2026-07-20)
+
+
+### Features
+
+* Phase 1 — auth, paywall, media pipeline, admin users, feed filters ([ff75578](https://github.com/martynvdijke/redchef/commit/ff75578b163ccbaf969a0bd4a3a42e481ca997a9))
+
 ## [1.6.1](https://github.com/martynvdijke/redchef/compare/v1.6.0...v1.6.1) (2026-07-20)
 
 
