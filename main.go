@@ -19,7 +19,7 @@ var Version = "0.1.0"
 func main() {
 	// Configuration from environment
 	port := getEnv("PORT", "8080")
-	dbPath := getEnv("DB_PATH", "redchef.db")
+	dbPath := getEnv("DB_PATH", "/db/redchef.db")
 	adminUser := getEnv("ADMIN_USERNAME", "admin")
 	adminPass := getEnv("ADMIN_PASSWORD", "admin")
 
@@ -37,7 +37,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Static file server for uploads (served at /uploads/)
-	uploadDir := getEnv("UPLOAD_DIR", "uploads")
+	uploadDir := getEnv("UPLOAD_DIR", "/app/media")
 	uploadFS := http.FileServer(http.Dir(uploadDir))
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", uploadFS))
 
