@@ -1,3 +1,15 @@
+# [1.6.0](https://github.com/martynvdijke/redchef/compare/v1.5.1...v1.6.0) (2026-07-20)
+
+
+### Bug Fixes
+
+* align default uploadDir with main.go (/app/media) ([bd5cb5c](https://github.com/martynvdijke/redchef/commit/bd5cb5ce0802147f792892794759ae872f245c98))
+
+
+### Features
+
+* iDeal payment flow with per-item and subscription pricing ([1600caf](https://github.com/martynvdijke/redchef/commit/1600caf28bc32d2709f26c85a174c4cc4191f36f))
+
 ## [1.5.1](https://github.com/martynvdijke/redchef/compare/v1.5.0...v1.5.1) (2026-07-20)
 
 
