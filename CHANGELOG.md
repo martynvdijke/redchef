@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/martynvdijke/redchef/compare/v1.6.0...v1.6.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* restore updateMemberUI function that was accidentally removed ([269b424](https://github.com/martynvdijke/redchef/commit/269b4242f81ff0636b2de0592ad3070128df24a8))
+
 # [1.6.0](https://github.com/martynvdijke/redchef/compare/v1.5.1...v1.6.0) (2026-07-20)
 
 
