@@ -87,35 +87,41 @@ function handleUpload(e) {
   const form = e.target;
   const formData = new FormData(form);
   const status = document.getElementById('upload-status');
-  const progressBar = document.getElementById('upload-progress-bar');
-  const progressContainer = document.getElementById('upload-progress');
+  const progress = document.getElementById('upload-progress');
+  const progressFill = document.getElementById('progress-fill');
+  const progressText = document.getElementById('progress-text');
+  const uploadBtn = document.getElementById('upload-btn');
 
   status.textContent = '';
-  progressContainer.style.display = 'block';
-  progressBar.style.width = '0%';
-  progressBar.textContent = '';
+  progress.style.display = 'flex';
+  progressFill.style.width = '0%';
+  progressText.textContent = 'Starting...';
+  uploadBtn.disabled = true;
 
   const xhr = new XMLHttpRequest();
-  xhr.open('POST', API.upload);
 
-  xhr.upload.onprogress = function(e) {
+  xhr.upload.onprogress = function (e) {
     if (e.lengthComputable) {
       const pct = Math.round((e.loaded / e.total) * 100);
-      progressBar.style.width = pct + '%';
-      progressBar.textContent = pct + '%';
+      progressFill.style.width = pct + '%';
+      progressText.textContent = pct + '%';
+    } else {
+      progressText.textContent = 'Uploading...';
     }
   };
 
-  xhr.onload = function() {
+  xhr.onload = function () {
+    uploadBtn.disabled = false;
     if (xhr.status >= 200 && xhr.status < 300) {
-      progressBar.style.width = '100%';
-      progressBar.textContent = '100%';
+      progressFill.style.width = '100%';
+      progressText.textContent = '✅ Done!';
       status.textContent = 'Uploaded successfully!';
       status.style.color = '#4CAF50';
       form.reset();
+      setTimeout(() => { progress.style.display = 'none'; }, 1500);
       loadPosts();
-      setTimeout(() => { progressContainer.style.display = 'none'; }, 2000);
     } else {
+      progress.style.display = 'none';
       try {
         const data = JSON.parse(xhr.responseText);
         status.textContent = data.error || 'Upload failed';
@@ -123,16 +129,17 @@ function handleUpload(e) {
         status.textContent = 'Upload failed';
       }
       status.style.color = '#D42B2B';
-      progressBar.style.background = '#D42B2B';
     }
   };
 
-  xhr.onerror = function() {
+  xhr.onerror = function () {
+    uploadBtn.disabled = false;
+    progress.style.display = 'none';
     status.textContent = 'Network error';
     status.style.color = '#D42B2B';
-    progressBar.style.background = '#D42B2B';
   };
 
+  xhr.open('POST', API.upload, true);
   xhr.send(formData);
 }
 

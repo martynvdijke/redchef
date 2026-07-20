@@ -24,7 +24,7 @@ var uploadDir string
 func init() {
 	uploadDir = os.Getenv("UPLOAD_DIR")
 	if uploadDir == "" {
-		uploadDir = "/app/media"
+		uploadDir = "uploads"
 	}
 	os.MkdirAll(uploadDir, 0755)
 }

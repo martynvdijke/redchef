@@ -167,32 +167,41 @@
       grid-column: 1 / -1;
     }
 
-    .upload-status {
-      font-size: 0.85rem;
-      min-height: 1.5rem;
-    }
-
     .upload-progress {
-      width: 100%;
-      height: 22px;
-      background: #222;
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid #333;
+      margin-top: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
-    .upload-progress-bar {
+    .progress-bar {
+      flex: 1;
+      height: 8px;
+      background: #333;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, var(--gold), var(--copper));
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.7rem;
-      font-weight: 700;
-      color: #111;
+      border-radius: 4px;
       transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      font-size: 0.8rem;
+      color: var(--gray);
+      white-space: nowrap;
+      min-width: 60px;
+      text-align: right;
+    }
+
+    .upload-status {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      min-height: 1.5rem;
     }
 
     /* Posts table */
@@ -345,9 +354,12 @@
             </div>
           </div>
         </div>
-        <button type="submit" class="btn-primary" style="margin-top:1rem;">Upload</button>
-        <div class="upload-progress" id="upload-progress" style="display:none;margin-top:0.8rem;">
-          <div class="upload-progress-bar" id="upload-progress-bar">0%</div>
+        <button type="submit" class="btn-primary" style="margin-top:1rem;" id="upload-btn">Upload</button>
+        <div class="upload-progress" id="upload-progress" style="display:none;">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <div class="progress-text" id="progress-text">Uploading...</div>
         </div>
         <div class="upload-status" id="upload-status"></div>
       </form>
