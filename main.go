@@ -44,7 +44,7 @@ func main() {
 	// Public API
 	mux.HandleFunc("GET /api/posts", handlers.ListPosts)
 	mux.HandleFunc("GET /api/posts/{id}", handlers.GetPost)
-	mux.HandleFunc("POST /api/unlock", handlers.Unlock)
+	mux.HandleFunc("POST /api/subscribe", handlers.Subscribe)
 
 	// Admin API
 	mux.HandleFunc("POST /api/admin/login", handlers.Login)

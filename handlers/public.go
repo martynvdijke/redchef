@@ -45,51 +45,26 @@ func GetPost(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(post)
 }
 
-type UnlockRequest struct {
-	PostID int64 `json:"post_id"`
-}
-
-type UnlockResponse struct {
+type SubscribeResponse struct {
 	Ok       bool   `json:"ok"`
 	Message  string `json:"message"`
 	Charged  string `json:"charged"`
 }
 
-func Unlock(w http.ResponseWriter, r *http.Request) {
-	var req UnlockRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
-		return
-	}
-
-	// Verify post exists
-	_, err := db.GetPost(req.PostID)
-	if err != nil {
-		http.Error(w, `{"error":"post not found"}`, http.StatusNotFound)
-		return
-	}
-
-	// Track unlocked posts in cookie
-	var unlocked []string
-	cookie, err := r.Cookie("unlocked_posts")
-	if err == nil && cookie.Value != "" {
-		unlocked = append(unlocked, cookie.Value)
-	}
-	unlocked = append(unlocked, strconv.FormatInt(req.PostID, 10))
-
-	// Store as comma-separated list
+func Subscribe(w http.ResponseWriter, r *http.Request) {
+	// Set royal member cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     "unlocked_posts",
-		Value:    joinUnlocked(unlocked),
-		Path:     "/",
-		MaxAge:   86400 * 365, // 1 year
+		Name:   "royal_member",
+		Value:  "1",
+		Path:   "/",
+		MaxAge: 86400 * 365, // 1 year
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(UnlockResponse{
+	json.NewEncoder(w).Encode(SubscribeResponse{
 		Ok:      true,
-		Message: "Thank you for your payment! Your card has been charged $0.05.",
-		Charged: "0.05",
+		Message: "👑 Welcome to the Royal Inner Circle! Your card will be charged $4.99/month.",
+		Charged: "4.99",
 	})
 }
 
@@ -109,43 +84,4 @@ func PublicGetAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func joinUnlocked(ids []string) string {
-	seen := make(map[string]bool)
-	var result []string
-	for _, id := range ids {
-		// Split by comma in case the cookie already has multiple
-		for _, part := range splitAndTrim(id) {
-			if part != "" && !seen[part] {
-				seen[part] = true
-				result = append(result, part)
-			}
-		}
-	}
-	out := ""
-	for i, s := range result {
-		if i > 0 {
-			out += ","
-		}
-		out += s
-	}
-	return out
-}
 
-func splitAndTrim(s string) []string {
-	var result []string
-	current := ""
-	for _, c := range s {
-		if c == ',' {
-			if current != "" {
-				result = append(result, current)
-				current = ""
-			}
-		} else {
-			current += string(c)
-		}
-	}
-	if current != "" {
-		result = append(result, current)
-	}
-	return result
-}

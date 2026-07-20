@@ -1,108 +1,22 @@
-// RedChef - Fan Page Client
+// RedChef — Royal Fan Page Client
 
 const API = {
   posts: '/api/posts',
-  unlock: '/api/unlock',
+  subscribe: '/api/subscribe',
 };
 
-// Cookie helpers
+// ── Cookie helpers ──
+
 function getCookie(name) {
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
   return match ? match[2] : null;
 }
 
-function getUnlockedIds() {
-  const val = getCookie('unlocked_posts');
-  if (!val) return [];
-  return val.split(',').map(Number).filter(n => !isNaN(n));
+function isRoyalMember() {
+  return getCookie('royal_member') === '1';
 }
 
-// Render
-async function loadContent() {
-  const grid = document.getElementById('content-grid');
-  const sectionTitle = document.getElementById('section-title');
-
-  try {
-    const res = await fetch(API.posts);
-    if (!res.ok) throw new Error('Failed to load');
-    const posts = await res.json();
-
-    if (posts.length === 0) {
-      grid.innerHTML = `
-        <div class="empty-state">
-          <div class="big-icon">🍳</div>
-          <p>No content yet. The Chef is cooking up something special!</p>
-        </div>
-      `;
-      sectionTitle.textContent = 'Latest from The Chef';
-      return;
-    }
-
-    sectionTitle.textContent = `Latest from The Chef — ${posts.length} post${posts.length !== 1 ? 's' : ''}`;
-
-    const unlocked = getUnlockedIds();
-    grid.innerHTML = posts.map(post => renderCard(post, unlocked.includes(post.id))).join('');
-
-    // Attach unlock handlers
-    document.querySelectorAll('.unlock-btn').forEach(btn => {
-      btn.addEventListener('click', () => unlockPost(parseInt(btn.dataset.postId)));
-    });
-
-  } catch (err) {
-    grid.innerHTML = `
-      <div class="empty-state">
-        <div class="big-icon">😰</div>
-        <p>Couldn't reach the Chef's kitchen. Try again later!</p>
-      </div>
-    `;
-  }
-}
-
-function renderCard(post, isUnlocked) {
-  const mediaUrl = `/uploads/${post.filename}`;
-  const thumbnailUrl = post.thumbnail ? `/uploads/${post.thumbnail}` : mediaUrl;
-  const date = new Date(post.created_at).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric'
-  });
-
-  if (post.locked && !isUnlocked) {
-    return `
-      <div class="card card-locked">
-        <div style="position:relative;">
-          <img class="card-image" src="${thumbnailUrl}" alt="${escapeHtml(post.title)}" loading="lazy"
-               onerror="this.parentElement.innerHTML='<div class=card-image-placeholder>🍳</div>'">
-          <div class="card-locked-overlay">
-            <div class="lock-icon">🔒</div>
-            <div class="price-tag">$0.05</div>
-            <button class="unlock-btn" data-post-id="${post.id}">Pay 5¢ to see this</button>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="card-title">${escapeHtml(post.title)}</div>
-          ${post.description ? `<div class="card-desc">${escapeHtml(post.description)}</div>` : ''}
-          <div class="card-date">${date}</div>
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="card">
-      ${post.media_type === 'video'
-        ? `<video class="card-image" controls preload="metadata">
-             <source src="${mediaUrl}" type="video/mp4">
-           </video>`
-        : `<img class="card-image" src="${mediaUrl}" alt="${escapeHtml(post.title)}" loading="lazy"
-               onerror="this.parentElement.innerHTML='<div class=card-image-placeholder>🍳</div>'">`
-      }
-      <div class="card-body">
-        <div class="card-title">${escapeHtml(post.title)}</div>
-        ${post.description ? `<div class="card-desc">${escapeHtml(post.description)}</div>` : ''}
-        <div class="card-date">${date}</div>
-      </div>
-    </div>
-  `;
-}
+// ── Escape ──
 
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -110,37 +24,207 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// Unlock flow
-function unlockPost(postId) {
-  const overlay = document.createElement('div');
-  overlay.className = 'processing-overlay';
-  overlay.innerHTML = `
-    <div class="spinner">💳</div>
-    <div class="processing-text">PROCESSING PAYMENT...</div>
-  `;
-  document.body.appendChild(overlay);
+// ── State ──
 
-  // Simulate payment processing
-  setTimeout(async () => {
-    try {
-      const res = await fetch(API.unlock, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ post_id: postId }),
-      });
+let posts = [];
+let likedPosts = new Set();
 
-      if (!res.ok) throw new Error('Unlock failed');
-      const data = await res.json();
+// ── Render ──
 
-      overlay.remove();
-      showToast(data.message, data.charged);
-      loadContent(); // Re-render grid
-    } catch (err) {
-      overlay.remove();
-      showToast('❌ Payment failed! Actually, nothing went wrong — try again.', null, true);
+async function loadContent() {
+  const feed = document.getElementById('feed');
+
+  try {
+    const res = await fetch(API.posts);
+    if (!res.ok) throw new Error('Failed to load');
+    posts = await res.json();
+
+    const member = isRoyalMember();
+
+    // Update profile stats
+    document.getElementById('stat-posts').textContent = posts.length;
+
+    if (posts.length === 0) {
+      feed.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🍳</div>
+          <p>The Chef is still cooking... Check back soon for some sizzling content!</p>
+        </div>
+      `;
+      return;
     }
-  }, 2000);
+
+    feed.innerHTML = posts.map(post => renderPost(post, member)).join('');
+
+    // Attach subscribe buttons
+    document.querySelectorAll('.post-locked-btn').forEach(btn => {
+      btn.addEventListener('click', () => openSubscribeModal());
+    });
+
+    // Attach like buttons
+    document.querySelectorAll('.action-btn-like').forEach(btn => {
+      btn.addEventListener('click', () => toggleLike(btn));
+    });
+
+  } catch (err) {
+    feed.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">😰</div>
+        <p>Couldn't reach the Chef's kitchen. Try again later!</p>
+      </div>
+    `;
+  }
 }
+
+function renderPost(post, isMember) {
+  const mediaUrl = `/uploads/${post.filename}`;
+  const thumbnailUrl = post.thumbnail && post.thumbnail !== post.filename
+    ? `/uploads/${post.thumbnail}`
+    : mediaUrl;
+  const date = new Date(post.created_at).toLocaleDateString('en-US', {
+    year: 'numeric', month: 'short', day: 'numeric'
+  });
+  const isLiked = likedPosts.has(post.id);
+
+  let mediaHtml;
+  if (post.locked && !isMember) {
+    // Blurred preview with lock overlay
+    mediaHtml = `
+      <div class="post-media-locked">
+        <img class="post-media-blur" src="${thumbnailUrl}" alt="" loading="lazy"
+             onerror="this.style.display='none';this.parentElement.style.background='#222'">
+        <div class="post-locked-overlay">
+          <div class="post-locked-icon">🔒</div>
+          <div class="post-locked-text">Royal Members only</div>
+          <button class="post-locked-btn">Subscribe to view</button>
+        </div>
+      </div>
+    `;
+  } else if (post.media_type === 'video') {
+    mediaHtml = `
+      <div class="post-media">
+        <video controls preload="metadata">
+          <source src="${mediaUrl}" type="video/mp4">
+        </video>
+      </div>
+    `;
+  } else {
+    mediaHtml = `
+      <div class="post-media">
+        <img src="${mediaUrl}" alt="${escapeHtml(post.title)}" loading="lazy"
+             onerror="this.style.display='none';this.parentElement.style.background='#222'">
+      </div>
+    `;
+  }
+
+  return `
+    <div class="post-card">
+      <div class="post-header">
+        <div class="post-header-avatar">🍳</div>
+        <div class="post-header-info">
+          <div class="post-header-name">
+            Red Copper Chef
+            <span class="verified-badge" title="Verified Chef">✓</span>
+          </div>
+          <div class="post-header-date">${date}</div>
+        </div>
+      </div>
+      <div class="post-caption">
+        <div class="post-title">${escapeHtml(post.title)}</div>
+        ${post.description ? `<div class="post-desc">${escapeHtml(post.description)}</div>` : ''}
+      </div>
+      ${mediaHtml}
+      <div class="post-actions">
+        <button class="action-btn action-btn-like ${isLiked ? 'liked' : ''}" data-post-id="${post.id}">
+          <span class="action-icon">${isLiked ? '❤️' : '🤍'}</span>
+          <span>${isLiked ? '1' : '0'}</span>
+        </button>
+        <button class="action-btn" disabled>
+          <span class="action-icon">💬</span>
+          <span>0</span>
+        </button>
+        <button class="action-btn" disabled>
+          <span class="action-icon">💸</span>
+          <span>Tip</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// ── Like toggle ──
+
+function toggleLike(btn) {
+  const postId = parseInt(btn.dataset.postId);
+  const isLiked = likedPosts.has(postId);
+  if (isLiked) {
+    likedPosts.delete(postId);
+  } else {
+    likedPosts.add(postId);
+  }
+  // Re-render just the like button state
+  const heart = btn.querySelector('.action-icon');
+  const count = btn.querySelector('span:last-child');
+  if (likedPosts.has(postId)) {
+    btn.classList.add('liked');
+    heart.textContent = '❤️';
+    count.textContent = '1';
+  } else {
+    btn.classList.remove('liked');
+    heart.textContent = '🤍';
+    count.textContent = '0';
+  }
+}
+
+// ── Subscribe modal ──
+
+function openSubscribeModal() {
+  document.getElementById('subscribe-modal').style.display = 'flex';
+}
+
+function closeSubscribeModal() {
+  document.getElementById('subscribe-modal').style.display = 'none';
+}
+
+async function handleSubscribeSubmit(e) {
+  e.preventDefault();
+  closeSubscribeModal();
+
+  // Show processing overlay
+  const overlay = document.getElementById('processing-overlay');
+  overlay.style.display = 'flex';
+
+  // Brief processing simulation for the fake payment feel
+  await new Promise(resolve => setTimeout(resolve, 1800));
+
+  try {
+    const res = await fetch(API.subscribe, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    overlay.style.display = 'none';
+
+    if (!res.ok) throw new Error('Subscribe failed');
+    const data = await res.json();
+
+    showToast(data.message, data.charged);
+    updateMemberUI();
+    loadContent(); // Re-render feed unlocked
+  } catch (err) {
+    overlay.style.display = 'none';
+    showToast('❌ Subscription failed! Actually, nothing went wrong — try again.', null, true);
+  }
+}
+
+function updateMemberUI() {
+  const isMember = isRoyalMember();
+  document.getElementById('btn-subscribe-hero').style.display = isMember ? 'none' : '';
+  document.getElementById('btn-subscribed-hero').style.display = isMember ? 'inline-flex' : 'none';
+}
+
+// ── Toast ──
 
 function showToast(message, amount, isError) {
   const container = document.getElementById('toast-container');
@@ -167,7 +251,8 @@ function showToast(message, amount, isError) {
   }, 4000);
 }
 
-// Umami tracking init (shared with admin page)
+// ── Umami tracking ──
+
 async function initUmamiTracking() {
   try {
     const res = await fetch('/api/settings/analytics');
@@ -184,8 +269,26 @@ async function initUmamiTracking() {
   } catch (_) {}
 }
 
-// Init
+// ── Init ──
+
 document.addEventListener('DOMContentLoaded', () => {
   initUmamiTracking();
+
+  // Hero subscribe button
+  document.getElementById('btn-subscribe-hero').addEventListener('click', openSubscribeModal);
+
+  // Modal close
+  document.getElementById('modal-close').addEventListener('click', closeSubscribeModal);
+  document.getElementById('subscribe-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeSubscribeModal();
+  });
+
+  // Subscribe form
+  document.getElementById('subscribe-form').addEventListener('submit', handleSubscribeSubmit);
+
+  // Init member UI state
+  updateMemberUI();
+
+  // Load content
   loadContent();
 });
