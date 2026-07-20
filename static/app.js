@@ -208,6 +208,12 @@ function closeSubscribeModal() {
   document.getElementById('subscribe-modal').style.display = 'none';
 }
 
+function updateMemberUI() {
+  const isMember = isRoyalMember();
+  document.getElementById('btn-subscribe-hero').style.display = isMember ? 'none' : '';
+  document.getElementById('btn-subscribed-hero').style.display = isMember ? 'inline-flex' : 'none';
+}
+
 async function handleSubscribeSubmit(e) {
   e.preventDefault();
   closeSubscribeModal();
