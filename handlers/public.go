@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -45,14 +46,50 @@ func GetPost(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(post)
 }
 
+type SubscribeRequest struct {
+	PostID *int64 `json:"post_id,omitempty"`
+}
+
 type SubscribeResponse struct {
-	Ok       bool   `json:"ok"`
-	Message  string `json:"message"`
-	Charged  string `json:"charged"`
+	Ok      bool   `json:"ok"`
+	Message string `json:"message"`
+	Charged string `json:"charged"`
 }
 
 func Subscribe(w http.ResponseWriter, r *http.Request) {
-	// Set royal member cookie
+	var req SubscribeRequest
+	json.NewDecoder(r.Body).Decode(&req)
+
+	if req.PostID != nil {
+		// Per-item purchase — set individual unlock cookie
+		post, err := db.GetPost(*req.PostID)
+		if err != nil {
+			http.Error(w, `{"error":"post not found"}`, http.StatusNotFound)
+			return
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:   fmt.Sprintf("unlocked_%d", *req.PostID),
+			Value:  "1",
+			Path:   "/",
+			MaxAge: 86400 * 365,
+		})
+
+		price := "0.05"
+		if post.MediaType == "video" {
+			price = "0.20"
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(SubscribeResponse{
+			Ok:      true,
+			Message: "🔓 Ontgrendeld! Geniet ervan.",
+			Charged: price,
+		})
+		return
+	}
+
+	// Subscription — set royal member cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:   "royal_member",
 		Value:  "1",
@@ -63,7 +100,7 @@ func Subscribe(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(SubscribeResponse{
 		Ok:      true,
-		Message: "👑 Welcome to the Royal Inner Circle! Your card will be charged $4.99/month.",
+		Message: "👑 Welkom bij het Royal Inner Circle!",
 		Charged: "4.99",
 	})
 }

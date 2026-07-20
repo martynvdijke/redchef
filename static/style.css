@@ -482,6 +482,24 @@ body {
   transform: scale(1.05);
 }
 
+.post-locked-sub {
+  padding: 8px 18px;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: white;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+
+.post-locked-sub:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: white;
+}
+
 /* ========== POST ACTIONS ========== */
 
 .post-actions {
@@ -636,6 +654,14 @@ body {
   margin-bottom: 1rem;
 }
 
+.modal-note {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 0.75rem;
+  font-style: italic;
+}
+
 .btn-subscribe-modal {
   width: 100%;
   justify-content: center;
@@ -782,6 +808,92 @@ body {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* ========== MEDIA GRID VIEW ========== */
+
+.feed-media {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 0 !important;
+}
+
+.media-grid-item {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  cursor: pointer;
+  background: #000;
+}
+
+.media-grid-item img,
+.media-grid-item video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.media-grid-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.8));
+  opacity: 0;
+  transition: opacity 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.media-grid-item:hover .media-grid-info {
+  opacity: 1;
+}
+
+.media-grid-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-grid-date {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.6);
+}
+
+.media-grid-locked {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.media-grid-blur {
+  filter: blur(20px);
+  transform: scale(1.1);
+  width: 100%;
+  height: 100%;
+}
+
+.media-grid-blur img,
+.media-grid-blur video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-grid-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.3);
+  font-size: 2rem;
 }
 
 /* ========== RESPONSIVE ========== */

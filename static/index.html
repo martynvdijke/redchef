@@ -40,21 +40,21 @@
     <div class="profile-actions" id="profile-actions">
       <button class="btn-subscribe" id="btn-subscribe-hero">
         <span class="btn-subscribe-icon">👑</span>
-        <span class="btn-subscribe-text">Subscribe — $4.99<span class="btn-subscribe-per">/month</span></span>
+        <span class="btn-subscribe-text">Word Royal Member — €4,99<span class="btn-subscribe-per">/maand</span></span>
       </button>
       <button class="btn-subscribed" id="btn-subscribed-hero" style="display:none;" disabled>
-        Subscribed ✓<span class="btn-member-badge"> Royal Member 👑</span>
+        Royal Member ✓<span class="btn-member-badge"> 👑</span>
       </button>
     </div>
     <div class="profile-benefits">
-      Full recipes &nbsp;•&nbsp; Exclusive sizzling content &nbsp;•&nbsp; Behind-the-stove access
+      Alle recepten &nbsp;•&nbsp; Exclusieve content &nbsp;•&nbsp; Behind-the-stove toegang
     </div>
   </header>
 
   <!-- Tabs -->
   <div class="tabs-bar">
     <button class="tab tab-active" data-tab="posts">Posts</button>
-    <button class="tab" data-tab="media" disabled>Media</button>
+    <button class="tab" data-tab="media">Media</button>
   </div>
 
   <!-- Feed -->
@@ -65,43 +65,37 @@
     </div>
   </main>
 
-  <!-- Subscribe Modal -->
+  <!-- iDeal Modal -->
   <div class="modal-overlay" id="subscribe-modal" style="display:none;">
     <div class="modal">
       <button class="modal-close" id="modal-close">✕</button>
       <div class="modal-header">
-        <span class="modal-icon">👑</span>
-        <h2>Become a Royal Member</h2>
-        <p class="modal-subtitle">Join the Chef's inner circle for <strong>$4.99/month</strong></p>
+        <span class="modal-icon" id="modal-icon">👑</span>
+        <h2 id="modal-title">Word Royal Member</h2>
+        <p class="modal-subtitle" id="modal-subtitle">Onbeperkt toegang voor <strong>€4,99/maand</strong></p>
       </div>
       <form class="modal-form" id="subscribe-form">
         <div class="modal-form-group">
-          <label>Card Number</label>
-          <input type="text" class="modal-input card-input" value="4242 4242 4242 4242" placeholder="4242 4242 4242 4242" autocomplete="off">
+          <label>Kies je bank</label>
+          <select class="modal-input" id="bank-select">
+            <option value="">— Selecteer —</option>
+            <option value="ING">🏦 ING</option>
+            <option value="Rabobank">🏦 Rabobank</option>
+            <option value="ABN AMRO">🏦 ABN AMRO</option>
+            <option value="SNS">🏦 SNS</option>
+            <option value="KNAB">🏦 KNAB</option>
+            <option value="Triodos">🏦 Triodos</option>
+            <option value="Revolut">🏦 Revolut</option>
+            <option value="bunq">🏦 bunq</option>
+          </select>
         </div>
-        <div class="modal-form-row">
-          <div class="modal-form-group">
-            <label>Expiry</label>
-            <input type="text" class="modal-input" value="12/28" placeholder="MM/YY" autocomplete="off">
-          </div>
-          <div class="modal-form-group">
-            <label>CVC</label>
-            <input type="text" class="modal-input" value="123" placeholder="CVC" autocomplete="off">
-          </div>
-        </div>
-        <p class="modal-disclaimer">(Not really — this is a parody, no payment is processed.)</p>
-        <button type="submit" class="btn-subscribe btn-subscribe-modal">
-          <span class="btn-subscribe-icon">👑</span>
-          Subscribe for $4.99/month
+        <button type="submit" class="btn-subscribe btn-subscribe-modal" id="modal-action-btn">
+          <span class="btn-subscribe-icon">🏦</span>
+          <span id="modal-btn-text">Betaal €4,99 met iDeal</span>
         </button>
+        <p class="modal-note" id="modal-note">🔒 Parodie — er wordt niks afgeschreven</p>
       </form>
     </div>
-  </div>
-
-  <!-- Processing Overlay -->
-  <div class="processing-overlay" id="processing-overlay" style="display:none;">
-    <div class="processing-spinner">💳</div>
-    <div class="processing-text">Processing your subscription...</div>
   </div>
 
   <!-- Toast Container -->

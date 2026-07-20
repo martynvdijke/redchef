@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"redchef/db"
 )
@@ -300,7 +301,7 @@ func TestAdminUpdatePost_InvalidID(t *testing.T) {
 	}
 }
 
-func TestAdminUpload_MissingTitle(t *testing.T) {
+func TestAdminUpload_AutoTitle(t *testing.T) {
 	cleanup := setupHandlerTest(t)
 	defer cleanup()
 
@@ -310,9 +311,23 @@ func TestAdminUpload_MissingTitle(t *testing.T) {
 
 	AdminUpload(resp, req)
 
-	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", resp.Code, resp.Body.String())
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", resp.Code, resp.Body.String())
 	}
+
+	var post db.Post
+	json.NewDecoder(resp.Body).Decode(&post)
+	if post.Title == "" {
+		t.Error("expected auto-generated title, got empty")
+	}
+	// Title should be today's date, e.g. "July 20, 2026"
+	today := time.Now().Format("January 2, 2006")
+	if post.Title != today {
+		t.Errorf("expected title %q, got %q", today, post.Title)
+	}
+
+	db.DeletePost(post.ID)
+	os.Remove(filepath.Join(uploadDir, post.Filename))
 }
 
 func TestAdminUpload_MissingFile(t *testing.T) {

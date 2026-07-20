@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"redchef/db"
 )
@@ -64,8 +65,7 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 	locked := lockedStr == "true" || lockedStr == "on"
 
 	if title == "" {
-		http.Error(w, `{"error":"title is required"}`, http.StatusBadRequest)
-		return
+		title = time.Now().Format("January 2, 2006")
 	}
 
 	// Determine media type from extension
