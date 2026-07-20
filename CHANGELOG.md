@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/martynvdijke/redchef/compare/v1.5.0...v1.5.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* auto-append /script.js to Umami script URL if missing ([e536e18](https://github.com/martynvdijke/redchef/commit/e536e18def6f6b89253994c7a228624e2f8bf873))
+
 # [1.5.0](https://github.com/martynvdijke/redchef/compare/v1.4.0...v1.5.0) (2026-07-20)
 
 
