@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/martynvdijke/redchef/compare/v1.7.0...v1.8.0) (2026-07-20)
+
+
+### Features
+
+* Phase 2 social features + auth fix + email settings ([f86fe12](https://github.com/martynvdijke/redchef/commit/f86fe12b7f482b04835b65e4127f868abc052de2))
+
 # [1.7.0](https://github.com/martynvdijke/redchef/compare/v1.6.1...v1.7.0) (2026-07-20)
 
 
