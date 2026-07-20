@@ -260,10 +260,15 @@ async function initUmamiTracking() {
     const settings = await res.json();
     if (!settings.tracking_enabled || !settings.umami_script_url || !settings.umami_website_id) return;
 
+    // Auto-append /script.js if URL doesn't end with a .js file
+    let src = settings.umami_script_url;
+    if (src && !src.match(/\.js$/)) {
+      src = src.replace(/\/+$/, '') + '/script.js';
+    }
     const script = document.createElement('script');
     script.async = true;
     script.defer = true;
-    script.src = settings.umami_script_url;
+    script.src = src;
     script.setAttribute('data-website-id', settings.umami_website_id);
     document.head.appendChild(script);
   } catch (_) {}
