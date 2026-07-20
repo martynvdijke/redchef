@@ -77,6 +77,25 @@ body {
 
 .nav-name span { color: var(--red); }
 
+.nav-admin-link {
+  margin-left: auto;
+  text-decoration: none;
+  color: var(--gray);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-admin-link:hover {
+  color: var(--gold);
+  background: rgba(245, 197, 24, 0.1);
+}
+
 /* ========== COVER BANNER ========== */
 
 .cover-banner {

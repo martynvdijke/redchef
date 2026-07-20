@@ -56,6 +56,7 @@ func main() {
 	mux.Handle("GET /api/admin/posts", handlers.AdminAuth(http.HandlerFunc(handlers.AdminListPosts)))
 	mux.Handle("POST /api/admin/upload", handlers.AdminAuth(http.HandlerFunc(handlers.AdminUpload)))
 	mux.Handle("DELETE /api/admin/posts/{id}", handlers.AdminAuth(http.HandlerFunc(handlers.AdminDeletePost)))
+	mux.Handle("PATCH /api/admin/posts/{id}", handlers.AdminAuth(http.HandlerFunc(handlers.AdminUpdatePost)))
 	mux.Handle("GET /api/admin/settings/analytics", handlers.AdminAuth(http.HandlerFunc(handlers.AdminGetAnalyticsSettings)))
 	mux.Handle("PUT /api/admin/settings/analytics", handlers.AdminAuth(http.HandlerFunc(handlers.AdminUpdateAnalyticsSettings)))
 
@@ -93,7 +94,7 @@ func withMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// CORS headers for development
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 		if r.Method == "OPTIONS" {

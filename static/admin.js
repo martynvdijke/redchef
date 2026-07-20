@@ -81,37 +81,59 @@ function showDashboard() {
   loadSettings();
 }
 
-// Upload
-async function handleUpload(e) {
+// Upload with progress bar
+function handleUpload(e) {
   e.preventDefault();
   const form = e.target;
   const formData = new FormData(form);
   const status = document.getElementById('upload-status');
+  const progressBar = document.getElementById('upload-progress-bar');
+  const progressContainer = document.getElementById('upload-progress');
 
-  status.textContent = 'Uploading...';
-  status.style.color = '#F5C518';
+  status.textContent = '';
+  progressContainer.style.display = 'block';
+  progressBar.style.width = '0%';
+  progressBar.textContent = '';
 
-  try {
-    const res = await fetch(API.upload, {
-      method: 'POST',
-      body: formData,
-    });
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', API.upload);
 
-    if (!res.ok) {
-      const data = await res.json();
-      status.textContent = data.error || 'Upload failed';
-      status.style.color = '#D42B2B';
-      return;
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      progressBar.style.width = pct + '%';
+      progressBar.textContent = pct + '%';
     }
+  };
 
-    status.textContent = 'Uploaded successfully!';
-    status.style.color = '#4CAF50';
-    form.reset();
-    loadPosts();
-  } catch (err) {
+  xhr.onload = function() {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      progressBar.style.width = '100%';
+      progressBar.textContent = '100%';
+      status.textContent = 'Uploaded successfully!';
+      status.style.color = '#4CAF50';
+      form.reset();
+      loadPosts();
+      setTimeout(() => { progressContainer.style.display = 'none'; }, 2000);
+    } else {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        status.textContent = data.error || 'Upload failed';
+      } catch (_) {
+        status.textContent = 'Upload failed';
+      }
+      status.style.color = '#D42B2B';
+      progressBar.style.background = '#D42B2B';
+    }
+  };
+
+  xhr.onerror = function() {
     status.textContent = 'Network error';
     status.style.color = '#D42B2B';
-  }
+    progressBar.style.background = '#D42B2B';
+  };
+
+  xhr.send(formData);
 }
 
 // Load posts
@@ -139,13 +161,34 @@ async function loadPosts() {
         </td>
         <td>${escapeHtml(post.title)}</td>
         <td><span class="type-badge type-${post.media_type}">${post.media_type}</span></td>
-        <td>${post.locked ? '🔒 Yes' : '🔓 No'}</td>
+        <td>
+          <span class="lock-status">${post.locked ? '🔒' : '🔓'}</span>
+          <button class="lock-btn" onclick="toggleLock(${post.id}, ${post.locked})" title="${post.locked ? 'Unlock' : 'Lock'}">
+            ${post.locked ? 'Unlock' : 'Lock'}
+          </button>
+        </td>
         <td>${new Date(post.created_at).toLocaleDateString()}</td>
         <td><button class="delete-btn" onclick="deletePost(${post.id})">Delete</button></td>
       </tr>
     `).join('');
   } catch (err) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#D42B2B;">Failed to load posts</td></tr>';
+  }
+}
+
+// Toggle lock state
+async function toggleLock(id, currentlyLocked) {
+  const newLocked = !currentlyLocked;
+  try {
+    const res = await fetch(`${API.posts}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locked: newLocked }),
+    });
+    if (!res.ok) throw new Error('Failed');
+    loadPosts();
+  } catch (err) {
+    alert('Failed to update lock state');
   }
 }
 

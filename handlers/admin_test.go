@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -197,6 +198,105 @@ func TestAdminUpload_LockedField(t *testing.T) {
 			db.DeletePost(post.ID)
 			os.Remove(filepath.Join(uploadDir, post.Filename))
 		})
+	}
+}
+
+func createPostForTest(t *testing.T) *db.Post {
+	t.Helper()
+	imgData := createTestImage(t)
+	req := buildUploadRequest(t, "Test Post", "desc", "true", imgData, "test.jpg")
+	resp := httptest.NewRecorder()
+	AdminUpload(resp, req)
+	var post db.Post
+	json.NewDecoder(resp.Body).Decode(&post)
+	return &post
+}
+
+func TestAdminUpdatePost_Lock(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	post := createPostForTest(t)
+	defer db.DeletePost(post.ID)
+	defer os.Remove(filepath.Join(uploadDir, post.Filename))
+
+	if !post.Locked {
+		t.Fatal("expected post to be locked initially")
+	}
+
+	// Unlock
+	idStr := fmt.Sprintf("%d", post.ID)
+	body := bytes.NewReader([]byte(`{"locked":false}`))
+	req := authenticatedRequest(t, "PATCH", "/api/admin/posts/"+idStr, body)
+	req.SetPathValue("id", idStr)
+	resp := httptest.NewRecorder()
+	AdminUpdatePost(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+
+	var updated db.Post
+	json.NewDecoder(resp.Body).Decode(&updated)
+	if updated.Locked {
+		t.Error("expected locked=false after update")
+	}
+
+	// Lock again
+	body = bytes.NewReader([]byte(`{"locked":true}`))
+	req = authenticatedRequest(t, "PATCH", "/api/admin/posts/"+idStr, body)
+	req.SetPathValue("id", idStr)
+	resp = httptest.NewRecorder()
+	AdminUpdatePost(resp, req)
+
+	json.NewDecoder(resp.Body).Decode(&updated)
+	if !updated.Locked {
+		t.Error("expected locked=true after second update")
+	}
+}
+
+func TestAdminUpdatePost_NotFound(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	body := bytes.NewReader([]byte(`{"locked":false}`))
+	req := authenticatedRequest(t, "PATCH", "/api/admin/posts/99999", body)
+	req.SetPathValue("id", "99999")
+	resp := httptest.NewRecorder()
+	AdminUpdatePost(resp, req)
+
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestAdminUpdatePost_MissingField(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	body := bytes.NewReader([]byte(`{}`))
+	req := authenticatedRequest(t, "PATCH", "/api/admin/posts/1", body)
+	req.SetPathValue("id", "1")
+	resp := httptest.NewRecorder()
+	AdminUpdatePost(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestAdminUpdatePost_InvalidID(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	body := bytes.NewReader([]byte(`{"locked":true}`))
+	req := authenticatedRequest(t, "PATCH", "/api/admin/posts/abc", body)
+	req.SetPathValue("id", "abc")
+	resp := httptest.NewRecorder()
+	AdminUpdatePost(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", resp.Code, resp.Body.String())
 	}
 }
 

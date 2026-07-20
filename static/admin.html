@@ -168,9 +168,31 @@
     }
 
     .upload-status {
-      margin-top: 1rem;
       font-size: 0.85rem;
       min-height: 1.5rem;
+    }
+
+    .upload-progress {
+      width: 100%;
+      height: 22px;
+      background: #222;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #333;
+    }
+
+    .upload-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--gold), var(--copper));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #111;
+      transition: width 0.3s ease;
     }
 
     /* Posts table */
@@ -226,6 +248,27 @@
     .delete-btn:hover {
       background: var(--red);
       color: white;
+    }
+
+    .lock-btn {
+      padding: 4px 10px;
+      background: transparent;
+      color: var(--gold);
+      border: 1px solid var(--gold);
+      border-radius: 6px;
+      font-size: 0.7rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-left: 6px;
+    }
+
+    .lock-btn:hover {
+      background: var(--gold);
+      color: #111;
+    }
+
+    .lock-status {
+      font-size: 0.85rem;
     }
 
     .checkbox-group {
@@ -303,6 +346,9 @@
           </div>
         </div>
         <button type="submit" class="btn-primary" style="margin-top:1rem;">Upload</button>
+        <div class="upload-progress" id="upload-progress" style="display:none;margin-top:0.8rem;">
+          <div class="upload-progress-bar" id="upload-progress-bar">0%</div>
+        </div>
         <div class="upload-status" id="upload-status"></div>
       </form>
     </div>

@@ -246,6 +246,18 @@ func GetPost(id int64) (*Post, error) {
 	return p, nil
 }
 
+func UpdatePostLock(id int64, locked bool) (*Post, error) {
+	lockedInt := 0
+	if locked {
+		lockedInt = 1
+	}
+	_, err := DB.Exec("UPDATE posts SET locked = ? WHERE id = ?", lockedInt, id)
+	if err != nil {
+		return nil, err
+	}
+	return GetPost(id)
+}
+
 func DeletePost(id int64) error {
 	_, err := DB.Exec("DELETE FROM posts WHERE id = ?", id)
 	return err

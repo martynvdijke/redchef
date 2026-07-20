@@ -24,7 +24,7 @@ var uploadDir string
 func init() {
 	uploadDir = os.Getenv("UPLOAD_DIR")
 	if uploadDir == "" {
-		uploadDir = "uploads"
+		uploadDir = "/app/media"
 	}
 	os.MkdirAll(uploadDir, 0755)
 }
@@ -106,6 +106,39 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(post)
+}
+
+type UpdatePostRequest struct {
+	Locked *bool `json:"locked"`
+}
+
+func AdminUpdatePost(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req UpdatePostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Locked == nil {
+		http.Error(w, `{"error":"locked field is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	post, err := db.UpdatePostLock(id, *req.Locked)
+	if err != nil {
+		http.Error(w, `{"error":"post not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(post)
 }
 
