@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/martynvdijke/redchef/compare/v1.1.3...v1.2.0) (2026-07-20)
+
+
+### Features
+
+* royal member subscription gate with fan-site UI ([e12e044](https://github.com/martynvdijke/redchef/commit/e12e04489b636e47b44f5d29a7b2ad9e762d561b))
+
 ## [1.1.3](https://github.com/martynvdijke/redchef/compare/v1.1.2...v1.1.3) (2026-07-20)
 
 
