@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -41,6 +42,49 @@ type AnalyticsSettings struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+type EmailSettings struct {
+	ID        int64     `json:"id"`
+	SMTPHost  string    `json:"smtp_host"`
+	SMTPPort  int       `json:"smtp_port"`
+	Username  string    `json:"username"`
+	Password  string    `json:"password"`
+	FromAddr  string    `json:"from_addr"`
+	Encryption string   `json:"encryption"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type Comment struct {
+	ID        int64     `json:"id"`
+	PostID    int64     `json:"post_id"`
+	UserID    int64     `json:"user_id"`
+	Username  string    `json:"username"`
+	ParentID  *int64    `json:"parent_id,omitempty"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Favourite struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	PostID    int64     `json:"post_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Tip struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	PostID    int64     `json:"post_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type PostLink struct {
+	ID           int64  `json:"id"`
+	PostID       int64  `json:"post_id"`
+	LinkedPostID int64  `json:"linked_post_id"`
+	LinkedTitle  string `json:"linked_title,omitempty"`
+	OrderIndex   int    `json:"order_index"`
+}
+
 type Session struct {
 	ID        int64     `json:"id"`
 	Token     string    `json:"token"`
@@ -59,19 +103,11 @@ var DB *sql.DB
 
 func Init(dbPath string) error {
 	var err error
-	DB, err = sql.Open("sqlite", dbPath)
+	// Use DSN with pragmas so they apply to every connection from the pool
+	dsn := dbPath + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+	DB, err = sql.Open("sqlite", dsn)
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
-	}
-
-	// Enable WAL mode for better concurrent access
-	if _, err := DB.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		return fmt.Errorf("enable wal: %w", err)
-	}
-
-	// Set busy timeout so writes wait instead of immediately failing with SQLITE_BUSY
-	if _, err := DB.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		return fmt.Errorf("set busy timeout: %w", err)
 	}
 
 	if err := migrate(); err != nil {
@@ -128,7 +164,71 @@ func migrate() error {
 			tracking_enabled INTEGER NOT NULL DEFAULT 0,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
+
+		CREATE TABLE IF NOT EXISTS comments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			post_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			parent_id INTEGER,
+			body TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (post_id) REFERENCES posts(id),
+			FOREIGN KEY (user_id) REFERENCES users(id),
+			FOREIGN KEY (parent_id) REFERENCES comments(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS favourites (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			post_id INTEGER NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, post_id),
+			FOREIGN KEY (user_id) REFERENCES users(id),
+			FOREIGN KEY (post_id) REFERENCES posts(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS tips (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			post_id INTEGER NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id),
+			FOREIGN KEY (post_id) REFERENCES posts(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS post_links (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			post_id INTEGER NOT NULL,
+			linked_post_id INTEGER NOT NULL,
+			order_index INTEGER DEFAULT 0,
+			FOREIGN KEY (post_id) REFERENCES posts(id),
+			FOREIGN KEY (linked_post_id) REFERENCES posts(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS email_settings (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			smtp_host TEXT NOT NULL DEFAULT '',
+			smtp_port INTEGER NOT NULL DEFAULT 587,
+			username TEXT NOT NULL DEFAULT '',
+			password TEXT NOT NULL DEFAULT '',
+			from_addr TEXT NOT NULL DEFAULT '',
+			encryption TEXT NOT NULL DEFAULT 'tls',
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
+
+	// Migrate existing tables: add columns that may be missing on upgraded DBs
+	migrateAddColumn("users", "email", "TEXT DEFAULT ''")
+	migrateAddColumn("users", "role", "TEXT DEFAULT 'normal'")
+	migrateAddColumn("users", "paid", "INTEGER DEFAULT 0")
+	migrateAddColumn("users", "created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP")
+
+	// Seed default email settings row if table is empty
+	var emailCount int
+	DB.QueryRow("SELECT COUNT(*) FROM email_settings").Scan(&emailCount)
+	if emailCount == 0 {
+		DB.Exec("INSERT INTO email_settings (smtp_host, smtp_port, username, password, from_addr, encryption) VALUES ('', 587, '', '', '', 'tls')")
+	}
 
 	// Seed default analytics settings row if table is empty
 	var count int
@@ -522,6 +622,220 @@ func UpdateAnalyticsSettings(scriptURL, websiteID string, enabled bool) error {
 		scriptURL, websiteID, enabledInt,
 	)
 	return err
+}
+
+// ── Migration Helpers ──
+
+// migrateAddColumn adds a column to a table if it doesn't already exist.
+// SQLite < 3.36 doesn't support IF NOT EXISTS for ALTER TABLE, so we
+// ignore the "duplicate column name" error.
+func migrateAddColumn(table, column, colType string) {
+	_, err := DB.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, colType))
+	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		log.Printf("[db] migrate add column %s.%s: %v", table, column, err)
+	}
+}
+
+// ── Email Settings ──
+
+func GetEmailSettings() (*EmailSettings, error) {
+	s := &EmailSettings{}
+	var updatedAt string
+	err := DB.QueryRow(
+		"SELECT id, smtp_host, smtp_port, username, password, from_addr, encryption, updated_at FROM email_settings WHERE id = 1",
+	).Scan(&s.ID, &s.SMTPHost, &s.SMTPPort, &s.Username, &s.Password, &s.FromAddr, &s.Encryption, &updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	s.UpdatedAt, _ = parseTime(updatedAt)
+	return s, nil
+}
+
+func UpdateEmailSettings(host string, port int, username, password, fromAddr, encryption string) error {
+	_, err := DB.Exec(
+		"UPDATE email_settings SET smtp_host = ?, smtp_port = ?, username = ?, password = ?, from_addr = ?, encryption = ?, updated_at = datetime('now') WHERE id = 1",
+		host, port, username, password, fromAddr, encryption,
+	)
+	return err
+}
+
+// ── Comments ──
+
+func CreateComment(postID, userID int64, parentID *int64, body string) (*Comment, error) {
+	res, err := DB.Exec(
+		"INSERT INTO comments (post_id, user_id, parent_id, body) VALUES (?, ?, ?, ?)",
+		postID, userID, parentID, body,
+	)
+	if err != nil {
+		return nil, err
+	}
+	id, _ := res.LastInsertId()
+	return GetComment(id)
+}
+
+func GetComment(id int64) (*Comment, error) {
+	c := &Comment{}
+	var parentID sql.NullInt64
+	var createdAt string
+	err := DB.QueryRow(`
+		SELECT c.id, c.post_id, c.user_id, u.email, c.parent_id, c.body, c.created_at
+		FROM comments c JOIN users u ON c.user_id = u.id
+		WHERE c.id = ?`, id,
+	).Scan(&c.ID, &c.PostID, &c.UserID, &c.Username, &parentID, &c.Body, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	if parentID.Valid {
+		c.ParentID = &parentID.Int64
+	}
+	c.CreatedAt, _ = parseTime(createdAt)
+	return c, nil
+}
+
+func GetCommentsByPost(postID int64) ([]Comment, error) {
+	rows, err := DB.Query(`
+		SELECT c.id, c.post_id, c.user_id, u.email, c.parent_id, c.body, c.created_at
+		FROM comments c JOIN users u ON c.user_id = u.id
+		WHERE c.post_id = ? ORDER BY c.created_at ASC`, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []Comment
+	for rows.Next() {
+		var c Comment
+		var parentID sql.NullInt64
+		var createdAt string
+		if err := rows.Scan(&c.ID, &c.PostID, &c.UserID, &c.Username, &parentID, &c.Body, &createdAt); err != nil {
+			return nil, err
+		}
+		if parentID.Valid {
+			c.ParentID = &parentID.Int64
+		}
+		c.CreatedAt, _ = parseTime(createdAt)
+		comments = append(comments, c)
+	}
+	return comments, nil
+}
+
+func DeleteComment(id int64) error {
+	_, err := DB.Exec("DELETE FROM comments WHERE id = ?", id)
+	return err
+}
+
+// ── Favourites ──
+
+func GetUserFavourited(userID, postID int64) (bool, error) {
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM favourites WHERE user_id = ? AND post_id = ?", userID, postID).Scan(&count)
+	return count > 0, err
+}
+
+func GetFavouriteCount(postID int64) (int, error) {
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM favourites WHERE post_id = ?", postID).Scan(&count)
+	return count, err
+}
+
+func ToggleFavourite(userID, postID int64) (bool, error) {
+	// Check if already favourited
+	var id int64
+	err := DB.QueryRow("SELECT id FROM favourites WHERE user_id = ? AND post_id = ?", userID, postID).Scan(&id)
+	if err == nil {
+		// Already favourited — remove
+		_, err = DB.Exec("DELETE FROM favourites WHERE id = ?", id)
+		return false, err
+	}
+	// Not favourited — add
+	_, err = DB.Exec("INSERT INTO favourites (user_id, post_id) VALUES (?, ?)", userID, postID)
+	return true, err
+}
+
+func ListFavourites(userID int64) ([]Post, error) {
+	rows, err := DB.Query(`
+		SELECT p.id, p.title, p.description, p.media_type, p.filename, p.thumbnail, p.locked, p.processing, p.created_at
+		FROM posts p JOIN favourites f ON p.id = f.post_id
+		WHERE f.user_id = ? ORDER BY f.created_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []Post
+	for rows.Next() {
+		var p Post
+		var lockedInt, processingInt int
+		var createdAt string
+		if err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename, &p.Thumbnail, &lockedInt, &processingInt, &createdAt); err != nil {
+			return nil, err
+		}
+		p.Locked = lockedInt == 1
+		p.Processing = processingInt == 1
+		p.CreatedAt, _ = parseTime(createdAt)
+		posts = append(posts, p)
+	}
+	return posts, nil
+}
+
+// ── Tips ──
+
+func GetTipCount(postID int64) (int, error) {
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM tips WHERE post_id = ?", postID).Scan(&count)
+	return count, err
+}
+
+func HasUserTipped(userID, postID int64) (bool, error) {
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM tips WHERE user_id = ? AND post_id = ?", userID, postID).Scan(&count)
+	return count > 0, err
+}
+
+func CreateTip(userID, postID int64) error {
+	_, err := DB.Exec("INSERT INTO tips (user_id, post_id) VALUES (?, ?)", userID, postID)
+	return err
+}
+
+// ── Linked Posts ──
+
+func SetPostLinks(postID int64, linkedIDs []int64) error {
+	// Remove existing links for this post
+	if _, err := DB.Exec("DELETE FROM post_links WHERE post_id = ?", postID); err != nil {
+		return err
+	}
+
+	for i, linkedID := range linkedIDs {
+		_, err := DB.Exec(
+			"INSERT INTO post_links (post_id, linked_post_id, order_index) VALUES (?, ?, ?)",
+			postID, linkedID, i,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func GetPostLinks(postID int64) ([]PostLink, error) {
+	rows, err := DB.Query(`
+		SELECT pl.id, pl.post_id, pl.linked_post_id, p.title, pl.order_index
+		FROM post_links pl JOIN posts p ON pl.linked_post_id = p.id
+		WHERE pl.post_id = ? ORDER BY pl.order_index ASC`, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []PostLink
+	for rows.Next() {
+		var l PostLink
+		if err := rows.Scan(&l.ID, &l.PostID, &l.LinkedPostID, &l.LinkedTitle, &l.OrderIndex); err != nil {
+			return nil, err
+		}
+		links = append(links, l)
+	}
+	return links, nil
 }
 
 // ── Helpers ──

@@ -50,8 +50,12 @@ func ListPosts(w http.ResponseWriter, r *http.Request) {
 	// Enrich response with access info
 	type postResponse struct {
 		db.Post
-		MediaURL *string `json:"media_url"`
-		Unlocked bool    `json:"unlocked"`
+		MediaURL       *string       `json:"media_url"`
+		Unlocked       bool          `json:"unlocked"`
+		Favourited     bool          `json:"favourited"`
+		FavouriteCount int           `json:"favourite_count"`
+		TipCount       int           `json:"tip_count"`
+		LinkedPosts    []db.PostLink `json:"linked_posts,omitempty"`
 	}
 
 	responses := make([]postResponse, len(posts))
@@ -62,10 +66,21 @@ func ListPosts(w http.ResponseWriter, r *http.Request) {
 			url := "/uploads/" + p.Filename
 			mediaURL = &url
 		}
+		favourited, _ := db.GetUserFavourited(userID, p.ID)
+		favCount, _ := db.GetFavouriteCount(p.ID)
+		tipCount, _ := db.GetTipCount(p.ID)
+		links, _ := db.GetPostLinks(p.ID)
+		if links == nil {
+			links = []db.PostLink{}
+		}
 		responses[i] = postResponse{
-			Post:     p,
-			MediaURL: mediaURL,
-			Unlocked: unlocked,
+			Post:           p,
+			MediaURL:       mediaURL,
+			Unlocked:       unlocked,
+			Favourited:     favourited,
+			FavouriteCount: favCount,
+			TipCount:       tipCount,
+			LinkedPosts:    links,
 		}
 	}
 
@@ -98,12 +113,31 @@ func GetPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	unlocked := !post.Locked || isPaid
+	favourited, _ := db.GetUserFavourited(userID, post.ID)
+	favCount, _ := db.GetFavouriteCount(post.ID)
+	tipCount, _ := db.GetTipCount(post.ID)
+	links, _ := db.GetPostLinks(post.ID)
+	if links == nil {
+		links = []db.PostLink{}
+	}
+
 	type postDetail struct {
 		db.Post
-		MediaURL *string `json:"media_url"`
-		Unlocked bool    `json:"unlocked"`
+		MediaURL       *string       `json:"media_url"`
+		Unlocked       bool          `json:"unlocked"`
+		Favourited     bool          `json:"favourited"`
+		FavouriteCount int           `json:"favourite_count"`
+		TipCount       int           `json:"tip_count"`
+		LinkedPosts    []db.PostLink `json:"linked_posts,omitempty"`
 	}
-	response := postDetail{Post: *post, Unlocked: unlocked}
+	response := postDetail{
+		Post:           *post,
+		Unlocked:       unlocked,
+		Favourited:     favourited,
+		FavouriteCount: favCount,
+		TipCount:       tipCount,
+		LinkedPosts:    links,
+	}
 	if unlocked {
 		url := "/uploads/" + post.Filename
 		response.MediaURL = &url

@@ -45,6 +45,7 @@ func setupHandlerTest(t *testing.T) (cleanup func()) {
 	}
 
 	return func() {
+		ProcessWG.Wait() // Wait for any in-flight media processing goroutines
 		db.DB.Close()
 		db.DB = nil
 		os.Remove("/tmp/redchef_handler_test.db")
@@ -56,6 +57,10 @@ func setupHandlerTest(t *testing.T) (cleanup func()) {
 
 func authenticatedRequest(t *testing.T, method, target string, body io.Reader) *http.Request {
 	t.Helper()
+
+	// Wait for any in-flight media processing to finish before creating a new session
+	ProcessWG.Wait()
+
 	req := httptest.NewRequest(method, target, body)
 
 	// Create user session
@@ -356,6 +361,98 @@ func TestAdminUpload_VideoType(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result.MediaType != "video" {
 		t.Errorf("expected media_type 'video', got %q", result.MediaType)
+	}
+}
+
+func TestAdminGetEmailSettings(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	req := authenticatedRequest(t, "GET", "/api/admin/settings/email", nil)
+	resp := httptest.NewRecorder()
+	AdminGetEmailSettings(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+
+	var settings db.EmailSettings
+	if err := json.NewDecoder(resp.Body).Decode(&settings); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if settings.SMTPPort != 587 {
+		t.Errorf("expected default port 587, got %d", settings.SMTPPort)
+	}
+	if settings.Encryption != "tls" {
+		t.Errorf("expected default encryption 'tls', got %q", settings.Encryption)
+	}
+	if settings.ID != 1 {
+		t.Errorf("expected ID 1, got %d", settings.ID)
+	}
+}
+
+func TestAdminUpdateEmailSettings(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	body := bytes.NewReader([]byte(`{
+		"smtp_host": "smtp.example.com",
+		"smtp_port": 465,
+		"username": "user",
+		"password": "secret",
+		"from_addr": "noreply@example.com",
+		"encryption": "ssl"
+	}`))
+	req := authenticatedRequest(t, "PUT", "/api/admin/settings/email", body)
+	resp := httptest.NewRecorder()
+	AdminUpdateEmailSettings(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+
+	var settings db.EmailSettings
+	if err := json.NewDecoder(resp.Body).Decode(&settings); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if settings.SMTPHost != "smtp.example.com" {
+		t.Errorf("expected host 'smtp.example.com', got %q", settings.SMTPHost)
+	}
+	if settings.SMTPPort != 465 {
+		t.Errorf("expected port 465, got %d", settings.SMTPPort)
+	}
+	if settings.Encryption != "ssl" {
+		t.Errorf("expected encryption 'ssl', got %q", settings.Encryption)
+	}
+}
+
+func TestAdminUpdateEmailSettings_Defaults(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	// Minimal payload — should get default port and encryption
+	body := bytes.NewReader([]byte(`{"smtp_host": "smtp.example.com"}`))
+	req := authenticatedRequest(t, "PUT", "/api/admin/settings/email", body)
+	resp := httptest.NewRecorder()
+	AdminUpdateEmailSettings(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+
+	var settings db.EmailSettings
+	json.NewDecoder(resp.Body).Decode(&settings)
+
+	if settings.SMTPHost != "smtp.example.com" {
+		t.Errorf("expected host 'smtp.example.com', got %q", settings.SMTPHost)
+	}
+	if settings.SMTPPort != 587 {
+		t.Errorf("expected default port 587, got %d", settings.SMTPPort)
+	}
+	if settings.Encryption != "tls" {
+		t.Errorf("expected default encryption 'tls', got %q", settings.Encryption)
 	}
 }
 

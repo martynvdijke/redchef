@@ -8,6 +8,7 @@ const API = {
   posts: '/api/posts',
   unlock: '/api/pay/unlock',
   analytics: '/api/settings/analytics',
+  favourites: '/api/favourites',
 };
 
 let currentUser = null;
@@ -56,6 +57,8 @@ function showLoggedIn() {
     $('paywall-banner').style.display = 'block';
   }
 
+  $('tab-favourites').style.display = 'inline-flex';
+
   if (currentUser.role === 'admin') {
     $('nav-admin-link').style.display = 'inline-flex';
   } else {
@@ -68,6 +71,7 @@ function showLoggedOut() {
   $('btn-register').style.display = 'inline-flex';
   $('nav-user').style.display = 'none';
   $('paywall-banner').style.display = 'none';
+  $('tab-favourites').style.display = 'none';
   currentUser = null;
 }
 
@@ -209,7 +213,12 @@ async function loadContent() {
   if (dateTo) params.set('date_to', dateTo);
 
   try {
-    const url = API.posts + (params.toString() ? '?' + params.toString() : '');
+    let url;
+    if (currentTab === 'favourites') {
+      url = API.favourites;
+    } else {
+      url = API.posts + (params.toString() ? '?' + params.toString() : '');
+    }
     const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to load');
     posts = await res.json();
@@ -218,6 +227,8 @@ async function loadContent() {
 
     if (currentTab === 'media') {
       renderMediaView();
+    } else if (currentTab === 'favourites') {
+      renderPostsView();
     } else {
       renderPostsView();
     }
@@ -235,10 +246,13 @@ function renderPostsView() {
   const feed = $('feed');
 
   if (posts.length === 0) {
+    const emptyMsg = currentTab === 'favourites'
+      ? 'No favourites yet. ❤️ posts to save them here!'
+      : 'The Chef is still cooking... Check back soon for some sizzling content!';
     feed.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">🍳</div>
-        <p>The Chef is still cooking... Check back soon for some sizzling content!</p>
+        <div class="empty-icon">${currentTab === 'favourites' ? '❤️' : '🍳'}</div>
+        <p>${emptyMsg}</p>
       </div>
     `;
     return;
@@ -246,7 +260,7 @@ function renderPostsView() {
 
   const isPaid = currentUser && (currentUser.paid || currentUser.role === 'admin');
 
-  feed.innerHTML = posts.map(post => {
+  feed.innerHTML = posts.map((post, idx) => {
     const unlocked = !post.locked || isPaid;
     const mediaUrl = `/uploads/${post.filename}`;
     const thumbnailUrl = post.thumbnail && post.thumbnail !== post.filename
@@ -255,6 +269,7 @@ function renderPostsView() {
     const date = new Date(post.created_at).toLocaleDateString('en-US', {
       year: 'numeric', month: 'short', day: 'numeric'
     });
+    const postUrl = window.location.origin + '/posts/' + post.id;
 
     let mediaHtml;
     if (post.processing) {
@@ -295,8 +310,25 @@ function renderPostsView() {
       `;
     }
 
+    // Linked posts series navigation
+    let linkedHtml = '';
+    if (post.linked_posts && post.linked_posts.length > 0) {
+      linkedHtml = `
+        <div class="linked-posts">
+          <span class="linked-posts-label">📎 Part of this series:</span>
+          ${post.linked_posts.map(lp => `
+            <a href="/posts/${lp.linked_post_id}" class="linked-post-link" data-id="${lp.linked_post_id}">${escapeHtml(lp.linked_title)}</a>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    // Heart icon state
+    const heartIcon = post.favourited ? '❤️' : '🤍';
+    const heartClass = post.favourited ? 'action-btn active' : 'action-btn';
+
     return `
-      <div class="post-card">
+      <div class="post-card" data-post-id="${post.id}">
         <div class="post-header">
           <div class="post-header-avatar">🍳</div>
           <div class="post-header-info">
@@ -312,19 +344,232 @@ function renderPostsView() {
           ${post.description ? `<div class="post-desc">${escapeHtml(post.description)}</div>` : ''}
         </div>
         ${mediaHtml}
+        ${linkedHtml}
         <div class="post-actions">
-          <button class="action-btn" disabled>
+          <button class="action-btn" onclick="toggleComments(${post.id}, this)">
             <span class="action-icon">💬</span>
-            <span>0</span>
+            <span class="action-count" data-comment-count="${post.id}">0</span>
           </button>
-          <button class="action-btn" disabled>
+          <button class="${heartClass}" onclick="handleFavourite(${post.id}, this)">
+            <span class="action-icon">${heartIcon}</span>
+            <span class="action-count" data-fav-count="${post.id}">${post.favourite_count || 0}</span>
+          </button>
+          <button class="action-btn" onclick="handleTip(${post.id}, this)" ${!currentUser ? 'disabled' : ''}>
             <span class="action-icon">💸</span>
-            <span>Tip</span>
+            <span class="action-count" data-tip-count="${post.id}">${post.tip_count || 0}</span>
           </button>
+          <button class="action-btn" onclick="handleWhatsAppShare('${escapeHtml(post.title)}', ${post.id})">
+            <span class="action-icon">📱</span>
+          </button>
+        </div>
+        <div class="comments-section" id="comments-${post.id}" style="display:none;">
+          <div class="comments-loading" id="comments-loading-${post.id}">Loading comments...</div>
+          <div class="comments-list" id="comments-list-${post.id}"></div>
+          ${currentUser ? `
+            <div class="comment-form">
+              <textarea class="comment-input" id="comment-input-${post.id}" placeholder="Write a comment..." rows="2"></textarea>
+              <button class="filter-btn" onclick="submitComment(${post.id})">Post</button>
+            </div>
+          ` : `
+            <div class="comment-login-msg"><a onclick="openLoginModal()">Sign in</a> to leave a comment</div>
+          `}
         </div>
       </div>
     `;
   }).join('');
+
+  // Load comment counts for all posts
+  posts.forEach(post => loadCommentCount(post.id));
+}
+
+// ── Favourites ──
+
+async function handleFavourite(postId, btn) {
+  if (!currentUser) { openLoginModal(); return; }
+  try {
+    const res = await fetch('/api/posts/' + postId + '/favourite', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    // Toggle heart icon
+    const icon = btn.querySelector('.action-icon');
+    icon.textContent = data.favourited ? '❤️' : '🤍';
+    btn.classList.toggle('active', data.favourited);
+    // Update count
+    const countSpan = btn.querySelector('.action-count');
+    countSpan.textContent = data.favourite_count;
+  } catch (_) {
+    showToast('❌ Failed to toggle favourite');
+  }
+}
+
+// ── Tips ──
+
+async function handleTip(postId, btn) {
+  if (!currentUser) { openLoginModal(); return; }
+  try {
+    const res = await fetch('/api/posts/' + postId + '/tip', { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json();
+      showToast('❌ ' + (data.error || 'Failed'));
+      return;
+    }
+    const data = await res.json();
+    const countSpan = btn.querySelector('.action-count');
+    countSpan.textContent = data.tip_count;
+    showToast('🎉 Thanks for the tip!');
+    btn.disabled = true;
+  } catch (_) {
+    showToast('❌ Failed to send tip');
+  }
+}
+
+// ── WhatsApp Share ──
+
+function handleWhatsAppShare(title, postId) {
+  const url = window.location.origin + '/posts/' + postId;
+  const text = encodeURIComponent(title + '\n' + url);
+  window.open('https://wa.me/?text=' + text, '_blank');
+}
+
+// ── Comments ──
+
+async function loadCommentCount(postId) {
+  try {
+    const res = await fetch('/api/posts/' + postId + '/comments');
+    if (!res.ok) return;
+    const comments = await res.json();
+    const countSpan = document.querySelector(`[data-comment-count="${postId}"]`);
+    if (countSpan) countSpan.textContent = comments.length;
+  } catch (_) {}
+}
+
+async function toggleComments(postId, btn) {
+  const section = document.getElementById('comments-' + postId);
+  if (!section) return;
+  const isOpen = section.style.display !== 'none';
+  section.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    await loadComments(postId);
+  }
+}
+
+async function loadComments(postId) {
+  const list = document.getElementById('comments-list-' + postId);
+  const loading = document.getElementById('comments-loading-' + postId);
+  if (!list) return;
+  try {
+    if (loading) loading.style.display = 'block';
+    const res = await fetch('/api/posts/' + postId + '/comments');
+    if (!res.ok) throw new Error('Failed');
+    const comments = await res.json();
+    if (loading) loading.style.display = 'none';
+    renderComments(postId, comments, list);
+  } catch (_) {
+    if (loading) loading.style.display = 'none';
+    list.innerHTML = '<div class="comment-error">Failed to load comments.</div>';
+  }
+}
+
+function renderComments(postId, comments, container) {
+  if (comments.length === 0) {
+    container.innerHTML = '<div class="comment-empty">No comments yet. Be the first!</div>';
+    return;
+  }
+
+  // Build tree from flat list with parent_id
+  const tree = {};
+  const roots = [];
+  comments.forEach(c => {
+    tree[c.id] = { ...c, replies: [] };
+  });
+  comments.forEach(c => {
+    if (c.parent_id && tree[c.parent_id]) {
+      tree[c.parent_id].replies.push(tree[c.id]);
+    } else {
+      roots.push(tree[c.id]);
+    }
+  });
+
+  function renderCommentNode(node, depth) {
+    const indent = depth > 0 ? 'margin-left:' + (depth * 20) + 'px;' : '';
+    return `
+      <div class="comment" style="${indent}">
+        <div class="comment-avatar">👤</div>
+        <div class="comment-body">
+          <div class="comment-author">${escapeHtml(node.username || 'User')}</div>
+          <div class="comment-text">${escapeHtml(node.body)}</div>
+          <div class="comment-meta">
+            <span class="comment-date">${new Date(node.created_at).toLocaleDateString()}</span>
+            ${currentUser ? `<a class="comment-reply-link" onclick="openReplyForm(${postId}, ${node.id})">Reply</a>` : ''}
+          </div>
+          ${node.replies.length > 0 ? node.replies.map(r => renderCommentNode(r, depth + 1)).join('') : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  container.innerHTML = roots.map(r => renderCommentNode(r, 0)).join('');
+}
+
+function openReplyForm(postId, parentId) {
+  const list = document.getElementById('comments-list-' + postId);
+  // Remove any existing reply forms
+  list.querySelectorAll('.comment-reply-form').forEach(el => el.remove());
+
+  const form = document.createElement('div');
+  form.className = 'comment-reply-form';
+  form.style.marginLeft = '40px';
+  form.innerHTML = `
+    <textarea class="comment-input" id="reply-input-${postId}-${parentId}" placeholder="Write a reply..." rows="2"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="filter-btn" onclick="submitReply(${postId}, ${parentId})">Reply</button>
+      <button class="filter-btn" style="background:#555;" onclick="this.parentElement.parentElement.remove()">Cancel</button>
+    </div>
+  `;
+  list.appendChild(form);
+  document.getElementById('reply-input-' + postId + '-' + parentId).focus();
+}
+
+async function submitComment(postId) {
+  const input = document.getElementById('comment-input-' + postId);
+  const body = input.value.trim();
+  if (!body) return;
+  await submitCommentBody(postId, body, null);
+  input.value = '';
+}
+
+async function submitReply(postId, parentId) {
+  const input = document.getElementById('reply-input-' + postId + '-' + parentId);
+  const body = input.value.trim();
+  if (!body) return;
+  await submitCommentBody(postId, body, parentId);
+  // Remove reply form
+  const form = input.closest('.comment-reply-form');
+  if (form) form.remove();
+  // Reload comments
+  await loadComments(postId);
+}
+
+async function submitCommentBody(postId, body, parentId) {
+  try {
+    const payload = { body };
+    if (parentId) payload.parent_id = parentId;
+    const res = await fetch('/api/posts/' + postId + '/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      showToast('❌ ' + (data.error || 'Failed to post comment'));
+      return;
+    }
+    showToast('💬 Comment posted!');
+    await loadComments(postId);
+    await loadCommentCount(postId);
+  } catch (_) {
+    showToast('❌ Failed to post comment');
+  }
 }
 
 function renderMediaView() {

@@ -7,7 +7,9 @@ const API = {
   upload: '/api/admin/upload',
   users: '/api/admin/users',
   settings: '/api/admin/settings/analytics',
+  emailSettings: '/api/admin/settings/email',
   setupStatus: '/api/setup/status',
+  postsSimple: '/api/admin/posts/simple',
 };
 
 // Check existing auth on load
@@ -76,6 +78,7 @@ function showDashboard() {
   loadPosts();
   loadUsers();
   loadSettings();
+  loadEmailSettings();
 }
 
 // Upload
@@ -175,7 +178,10 @@ async function loadPosts() {
           </button>
         </td>
         <td>${new Date(post.created_at).toLocaleDateString()}</td>
-        <td><button class="delete-btn" onclick="deletePost(${post.id})">Delete</button></td>
+        <td>
+          <button class="lock-btn" onclick="openLinksModal(${post.id})">🔗 Links</button>
+          <button class="delete-btn" onclick="deletePost(${post.id})">Delete</button>
+        </td>
       </tr>
     `}).join('');
   } catch (err) {
@@ -326,6 +332,56 @@ async function handleSaveSettings(e) {
   }
 }
 
+// Email Settings
+async function loadEmailSettings() {
+  try {
+    const res = await fetch(API.emailSettings);
+    if (!res.ok) return;
+    const s = await res.json();
+    document.getElementById('smtp-host').value = s.smtp_host || '';
+    document.getElementById('smtp-port').value = s.smtp_port || 587;
+    document.getElementById('smtp-username').value = s.username || '';
+    document.getElementById('smtp-password').value = s.password || '';
+    document.getElementById('smtp-from').value = s.from_addr || '';
+    document.getElementById('smtp-encryption').value = s.encryption || 'tls';
+  } catch (_) {}
+}
+
+async function handleSaveEmailSettings(e) {
+  e.preventDefault();
+  const status = document.getElementById('email-settings-status');
+  status.textContent = 'Saving...';
+  status.style.color = '#F5C518';
+
+  try {
+    const res = await fetch(API.emailSettings, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        smtp_host: document.getElementById('smtp-host').value,
+        smtp_port: parseInt(document.getElementById('smtp-port').value) || 587,
+        username: document.getElementById('smtp-username').value,
+        password: document.getElementById('smtp-password').value,
+        from_addr: document.getElementById('smtp-from').value,
+        encryption: document.getElementById('smtp-encryption').value,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      status.textContent = data.error || 'Failed to save email settings';
+      status.style.color = '#D42B2B';
+      return;
+    }
+
+    status.textContent = 'Email settings saved';
+    status.style.color = '#4CAF50';
+  } catch (err) {
+    status.textContent = 'Network error';
+    status.style.color = '#D42B2B';
+  }
+}
+
 // Umami tracking init
 async function initUmamiTracking() {
   try {
@@ -347,6 +403,89 @@ async function initUmamiTracking() {
   } catch (_) {}
 }
 
+// ── Linked Posts Management ──
+
+let currentLinksPostId = null;
+let allPostsForLinks = [];
+
+async function openLinksModal(postId) {
+  currentLinksPostId = postId;
+  const modal = document.getElementById('links-modal');
+  modal.style.display = 'flex';
+
+  // Load all posts for the picker
+  try {
+    const res = await fetch(API.postsSimple);
+    if (!res.ok) throw new Error('Failed');
+    allPostsForLinks = await res.json();
+  } catch (_) {
+    allPostsForLinks = [];
+  }
+
+  // Load existing links for this post
+  let linkedIds = [];
+  try {
+    const res = await fetch('/api/posts/' + postId);
+    if (res.ok) {
+      const post = await res.json();
+      if (post.linked_posts) {
+        linkedIds = post.linked_posts.map(lp => lp.linked_post_id);
+      }
+    }
+  } catch (_) {}
+
+  const list = document.getElementById('links-list');
+  list.innerHTML = allPostsForLinks
+    .filter(p => p.id !== postId)
+    .map(p => {
+      const checked = linkedIds.includes(p.id) ? 'checked' : '';
+      return `
+        <label class="links-item">
+          <input type="checkbox" value="${p.id}" ${checked}>
+          <span>${escapeHtml(p.title)} (ID: ${p.id})</span>
+        </label>
+      `;
+    }).join('') || '<p style="color:#888;">No other posts available.</p>';
+}
+
+function closeLinksModal() {
+  document.getElementById('links-modal').style.display = 'none';
+  currentLinksPostId = null;
+}
+
+async function saveLinks() {
+  if (!currentLinksPostId) return;
+  const checkboxes = document.querySelectorAll('#links-list input[type="checkbox"]:checked');
+  const linkedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+  try {
+    const res = await fetch('/api/admin/posts/' + currentLinksPostId + '/links', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ linked_ids: linkedIds }),
+    });
+    if (!res.ok) throw new Error('Failed');
+    showToast('🔗 Links saved');
+    closeLinksModal();
+    loadPosts();
+  } catch (_) {
+    showToast('❌ Failed to save links');
+  }
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast-admin') || (() => {
+    const t = document.createElement('div');
+    t.id = 'toast-admin';
+    t.style.cssText = 'position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,0.85);color:#fff;padding:12px 20px;border-radius:8px;font-size:0.9rem;z-index:9999;transition:opacity 0.3s;';
+    document.body.appendChild(t);
+    return t;
+  })();
+  el.textContent = msg;
+  el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 3000);
+}
+
 // Helpers
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -359,6 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('login-form').addEventListener('submit', handleLogin);
   document.getElementById('upload-form').addEventListener('submit', handleUpload);
   document.getElementById('settings-form').addEventListener('submit', handleSaveSettings);
+  document.getElementById('email-settings-form').addEventListener('submit', handleSaveEmailSettings);
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
   initUmamiTracking();
   checkAuth();

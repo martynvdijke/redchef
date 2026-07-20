@@ -10,15 +10,28 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"redchef/db"
 )
 
+// ProcessWG tracks in-flight media processing goroutines for test cleanup.
+var ProcessWG sync.WaitGroup
+
 type AnalyticsSettingsRequest struct {
 	UmamiScriptURL  string `json:"umami_script_url"`
 	UmamiWebsiteID  string `json:"umami_website_id"`
 	TrackingEnabled bool   `json:"tracking_enabled"`
+}
+
+type EmailSettingsRequest struct {
+	SMTPHost   string `json:"smtp_host"`
+	SMTPPort   int    `json:"smtp_port"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	FromAddr   string `json:"from_addr"`
+	Encryption string `json:"encryption"`
 }
 
 var uploadDir string
@@ -101,7 +114,9 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Process media asynchronously
+	ProcessWG.Add(1)
 	go func() {
+		defer ProcessWG.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("[media] Panic processing post %d: %v", post.ID, r)
@@ -289,6 +304,42 @@ func AdminUpdateAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(settings)
 }
 
+// ── Email Settings (admin) ──
+
+func AdminGetEmailSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := db.GetEmailSettings()
+	if err != nil {
+		jsonError(w, "failed to get email settings", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(settings)
+}
+
+func AdminUpdateEmailSettings(w http.ResponseWriter, r *http.Request) {
+	var req EmailSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.SMTPPort == 0 {
+		req.SMTPPort = 587
+	}
+	if req.Encryption == "" {
+		req.Encryption = "tls"
+	}
+
+	if err := db.UpdateEmailSettings(req.SMTPHost, req.SMTPPort, req.Username, req.Password, req.FromAddr, req.Encryption); err != nil {
+		jsonError(w, "failed to save email settings", http.StatusInternalServerError)
+		return
+	}
+
+	settings, _ := db.GetEmailSettings()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(settings)
+}
+
 // ── Setup ──
 
 func Setup(w http.ResponseWriter, r *http.Request) {
@@ -362,6 +413,59 @@ func SetupStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]bool{
 		"needs_setup": !hasUsers,
 	})
+}
+
+// ── Linked Posts (admin) ──
+
+func AdminListAllPostsSimple(w http.ResponseWriter, r *http.Request) {
+	posts, err := db.GetPosts(nil)
+	if err != nil {
+		jsonError(w, "failed to list posts", http.StatusInternalServerError)
+		return
+	}
+	// Return lightweight list for the link picker
+	type simplePost struct {
+		ID    int64  `json:"id"`
+		Title string `json:"title"`
+	}
+	result := make([]simplePost, len(posts))
+	for i, p := range posts {
+		result[i] = simplePost{ID: p.ID, Title: p.Title}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+type SetLinksRequest struct {
+	LinkedIDs []int64 `json:"linked_ids"`
+}
+
+func AdminSetPostLinks(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	postID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		jsonError(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+
+	var req SetLinksRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := db.SetPostLinks(postID, req.LinkedIDs); err != nil {
+		jsonError(w, "failed to set links", http.StatusInternalServerError)
+		return
+	}
+
+	links, _ := db.GetPostLinks(postID)
+	if links == nil {
+		links = []db.PostLink{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(links)
 }
 
 // ── ID Generator ──

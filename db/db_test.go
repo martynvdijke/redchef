@@ -286,6 +286,78 @@ func TestDatePersistence(t *testing.T) {
 	}
 }
 
+func TestMigrateAddColumn(t *testing.T) {
+	setupTestDB(t)
+	defer cleanupTestDB(t)
+
+	// Should succeed (column doesn't exist yet)
+	migrateAddColumn("users", "test_col", "TEXT DEFAULT ''")
+	// Verify it was added
+	var colExists bool
+	row := DB.QueryRow("SELECT COUNT(*) > 0 FROM pragma_table_info('users') WHERE name = 'test_col'")
+	row.Scan(&colExists)
+	if !colExists {
+		t.Fatal("expected test_col to exist after migrateAddColumn")
+	}
+
+	// Should not error on duplicate
+	migrateAddColumn("users", "test_col", "TEXT DEFAULT ''")
+}
+
+func TestEmailSettings(t *testing.T) {
+	setupTestDB(t)
+	defer cleanupTestDB(t)
+
+	// Should have default seeded row from migration
+	settings, err := GetEmailSettings()
+	if err != nil {
+		t.Fatalf("GetEmailSettings failed: %v", err)
+	}
+
+	if settings.SMTPHost != "" {
+		t.Errorf("expected empty SMTP host, got %q", settings.SMTPHost)
+	}
+	if settings.SMTPPort != 587 {
+		t.Errorf("expected default port 587, got %d", settings.SMTPPort)
+	}
+	if settings.Encryption != "tls" {
+		t.Errorf("expected default encryption 'tls', got %q", settings.Encryption)
+	}
+	if settings.ID != 1 {
+		t.Errorf("expected ID 1, got %d", settings.ID)
+	}
+
+	// Update settings
+	err = UpdateEmailSettings("smtp.example.com", 465, "user@example.com", "secret", "noreply@example.com", "ssl")
+	if err != nil {
+		t.Fatalf("UpdateEmailSettings failed: %v", err)
+	}
+
+	settings, err = GetEmailSettings()
+	if err != nil {
+		t.Fatalf("GetEmailSettings after update failed: %v", err)
+	}
+
+	if settings.SMTPHost != "smtp.example.com" {
+		t.Errorf("expected smtp_host 'smtp.example.com', got %q", settings.SMTPHost)
+	}
+	if settings.SMTPPort != 465 {
+		t.Errorf("expected port 465, got %d", settings.SMTPPort)
+	}
+	if settings.Username != "user@example.com" {
+		t.Errorf("expected username 'user@example.com', got %q", settings.Username)
+	}
+	if settings.Password != "secret" {
+		t.Errorf("expected password 'secret', got %q", settings.Password)
+	}
+	if settings.FromAddr != "noreply@example.com" {
+		t.Errorf("expected from_addr 'noreply@example.com', got %q", settings.FromAddr)
+	}
+	if settings.Encryption != "ssl" {
+		t.Errorf("expected encryption 'ssl', got %q", settings.Encryption)
+	}
+}
+
 func TestCreatePostEmptyDescription(t *testing.T) {
 	setupTestDB(t)
 	defer cleanupTestDB(t)
