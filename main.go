@@ -49,10 +49,15 @@ func main() {
 	mux.HandleFunc("POST /api/admin/login", handlers.Login)
 	mux.HandleFunc("POST /api/admin/logout", handlers.Logout)
 
+	// Public settings (no auth)
+	mux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
+
 	// Admin API (authenticated)
 	mux.Handle("GET /api/admin/posts", handlers.AdminAuth(http.HandlerFunc(handlers.AdminListPosts)))
 	mux.Handle("POST /api/admin/upload", handlers.AdminAuth(http.HandlerFunc(handlers.AdminUpload)))
 	mux.Handle("DELETE /api/admin/posts/{id}", handlers.AdminAuth(http.HandlerFunc(handlers.AdminDeletePost)))
+	mux.Handle("GET /api/admin/settings/analytics", handlers.AdminAuth(http.HandlerFunc(handlers.AdminGetAnalyticsSettings)))
+	mux.Handle("PUT /api/admin/settings/analytics", handlers.AdminAuth(http.HandlerFunc(handlers.AdminUpdateAnalyticsSettings)))
 
 	// SPA fallback: serve embedded static files for all non-API routes
 	staticSub, err := fs.Sub(staticFiles, "static")

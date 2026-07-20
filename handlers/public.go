@@ -8,6 +8,12 @@ import (
 	"redchef/db"
 )
 
+type PublicAnalyticsResponse struct {
+	UmamiScriptURL  string `json:"umami_script_url"`
+	UmamiWebsiteID  string `json:"umami_website_id"`
+	TrackingEnabled bool   `json:"tracking_enabled"`
+}
+
 func ListPosts(w http.ResponseWriter, r *http.Request) {
 	posts, err := db.GetPosts()
 	if err != nil {
@@ -84,6 +90,22 @@ func Unlock(w http.ResponseWriter, r *http.Request) {
 		Ok:      true,
 		Message: "Thank you for your payment! Your card has been charged $0.05.",
 		Charged: "0.05",
+	})
+}
+
+func PublicGetAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := db.GetAnalyticsSettings()
+	if err != nil {
+		// Return safe defaults instead of erroring
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PublicAnalyticsResponse{})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(PublicAnalyticsResponse{
+		UmamiScriptURL:  settings.UmamiScriptURL,
+		UmamiWebsiteID:  settings.UmamiWebsiteID,
+		TrackingEnabled: settings.TrackingEnabled,
 	})
 }
 

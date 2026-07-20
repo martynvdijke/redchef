@@ -167,5 +167,25 @@ function showToast(message, amount, isError) {
   }, 4000);
 }
 
+// Umami tracking init (shared with admin page)
+async function initUmamiTracking() {
+  try {
+    const res = await fetch('/api/settings/analytics');
+    if (!res.ok) return;
+    const settings = await res.json();
+    if (!settings.tracking_enabled || !settings.umami_script_url || !settings.umami_website_id) return;
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.defer = true;
+    script.src = settings.umami_script_url;
+    script.setAttribute('data-website-id', settings.umami_website_id);
+    document.head.appendChild(script);
+  } catch (_) {}
+}
+
 // Init
-document.addEventListener('DOMContentLoaded', loadContent);
+document.addEventListener('DOMContentLoaded', () => {
+  initUmamiTracking();
+  loadContent();
+});

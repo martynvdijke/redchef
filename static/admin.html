@@ -307,6 +307,31 @@
       </form>
     </div>
 
+    <!-- Analytics Settings -->
+    <div class="upload-section" id="settings-section">
+      <h2>⚙️ Analytics Settings</h2>
+      <form id="settings-form">
+        <div class="form-row">
+          <div class="full form-group">
+            <div class="checkbox-group" style="margin-top:0;">
+              <input type="checkbox" name="tracking_enabled" id="tracking-enabled" value="true">
+              <label for="tracking-enabled">Enable Umami Analytics</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Umami Script URL</label>
+            <input type="url" name="umami_script_url" id="umami-script-url" placeholder="https://analytics.example.com/script.js">
+          </div>
+          <div class="form-group">
+            <label>Website ID</label>
+            <input type="text" name="umami_website_id" id="umami-website-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          </div>
+        </div>
+        <button type="submit" class="btn-primary" style="margin-top:1rem;background:var(--copper);">Save Settings</button>
+        <div class="upload-status" id="settings-status"></div>
+      </form>
+    </div>
+
     <!-- Posts Table -->
     <div style="overflow-x:auto;">
       <table class="admin-table">

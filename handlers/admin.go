@@ -13,6 +13,12 @@ import (
 	"redchef/db"
 )
 
+type AnalyticsSettingsRequest struct {
+	UmamiScriptURL  string `json:"umami_script_url"`
+	UmamiWebsiteID  string `json:"umami_website_id"`
+	TrackingEnabled bool   `json:"tracking_enabled"`
+}
+
 const uploadDir = "uploads"
 
 func init() {
@@ -128,6 +134,40 @@ func AdminDeletePost(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"ok":true}`))
+}
+
+func AdminGetAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := db.GetAnalyticsSettings()
+	if err != nil {
+		http.Error(w, `{"error":"failed to get settings"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(settings)
+}
+
+func AdminUpdateAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
+	var req AnalyticsSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.UmamiScriptURL != "" {
+		if !strings.HasPrefix(req.UmamiScriptURL, "https://") && !strings.HasPrefix(req.UmamiScriptURL, "http://") {
+			http.Error(w, `{"error":"script URL must start with http:// or https://"}`, http.StatusBadRequest)
+			return
+		}
+	}
+
+	if err := db.UpdateAnalyticsSettings(req.UmamiScriptURL, req.UmamiWebsiteID, req.TrackingEnabled); err != nil {
+		http.Error(w, `{"error":"failed to save settings"}`, http.StatusInternalServerError)
+		return
+	}
+
+	settings, _ := db.GetAnalyticsSettings()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(settings)
 }
 
 // Simple ID generator (not crypto, just for filenames)

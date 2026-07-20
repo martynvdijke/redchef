@@ -22,6 +22,14 @@ type Post struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type AnalyticsSettings struct {
+	ID              int64     `json:"id"`
+	UmamiScriptURL  string    `json:"umami_script_url"`
+	UmamiWebsiteID  string    `json:"umami_website_id"`
+	TrackingEnabled bool      `json:"tracking_enabled"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
 type Session struct {
 	ID        int64     `json:"id"`
 	Token     string    `json:"token"`
@@ -76,7 +84,25 @@ func migrate() error {
 			expires_at DATETIME NOT NULL,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		);
+
+		CREATE TABLE IF NOT EXISTS analytics_settings (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			umami_script_url TEXT NOT NULL DEFAULT '',
+			umami_website_id TEXT NOT NULL DEFAULT '',
+			tracking_enabled INTEGER NOT NULL DEFAULT 0,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
+
+	// Seed default analytics settings row if table is empty
+	var count int
+	DB.QueryRow("SELECT COUNT(*) FROM analytics_settings").Scan(&count)
+	if count == 0 {
+		_, err = DB.Exec("INSERT INTO analytics_settings (umami_script_url, umami_website_id, tracking_enabled) VALUES ('', '', 0)")
+		if err != nil {
+			return err
+		}
+	}
 	return err
 }
 
@@ -210,6 +236,35 @@ func GetPost(id int64) (*Post, error) {
 
 func DeletePost(id int64) error {
 	_, err := DB.Exec("DELETE FROM posts WHERE id = ?", id)
+	return err
+}
+
+// Analytics Settings
+
+func GetAnalyticsSettings() (*AnalyticsSettings, error) {
+	s := &AnalyticsSettings{}
+	var enabledInt int
+	var updatedAt string
+	err := DB.QueryRow(
+		"SELECT id, umami_script_url, umami_website_id, tracking_enabled, updated_at FROM analytics_settings WHERE id = 1",
+	).Scan(&s.ID, &s.UmamiScriptURL, &s.UmamiWebsiteID, &enabledInt, &updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	s.TrackingEnabled = enabledInt == 1
+	s.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	return s, nil
+}
+
+func UpdateAnalyticsSettings(scriptURL, websiteID string, enabled bool) error {
+	enabledInt := 0
+	if enabled {
+		enabledInt = 1
+	}
+	_, err := DB.Exec(
+		"UPDATE analytics_settings SET umami_script_url = ?, umami_website_id = ?, tracking_enabled = ?, updated_at = datetime('now') WHERE id = 1",
+		scriptURL, websiteID, enabledInt,
+	)
 	return err
 }
 

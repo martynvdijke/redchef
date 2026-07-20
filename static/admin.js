@@ -5,6 +5,7 @@ const API = {
   logout: '/api/admin/logout',
   posts: '/api/admin/posts',
   upload: '/api/admin/upload',
+  settings: '/api/admin/settings/analytics',
 };
 
 let currentUser = null;
@@ -64,6 +65,7 @@ function showDashboard() {
   document.getElementById('login-section').style.display = 'none';
   document.getElementById('dashboard-section').style.display = 'block';
   loadPosts();
+  loadSettings();
 }
 
 // Upload
@@ -147,6 +149,67 @@ async function deletePost(id) {
   }
 }
 
+// Settings
+async function loadSettings() {
+  try {
+    const res = await fetch(API.settings);
+    if (!res.ok) return;
+    const settings = await res.json();
+    document.getElementById('umami-script-url').value = settings.umami_script_url || '';
+    document.getElementById('umami-website-id').value = settings.umami_website_id || '';
+    document.getElementById('tracking-enabled').checked = settings.tracking_enabled || false;
+  } catch (_) {}
+}
+
+async function handleSaveSettings(e) {
+  e.preventDefault();
+  const status = document.getElementById('settings-status');
+  status.textContent = 'Saving...';
+  status.style.color = '#F5C518';
+
+  try {
+    const res = await fetch(API.settings, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        umami_script_url: document.getElementById('umami-script-url').value,
+        umami_website_id: document.getElementById('umami-website-id').value,
+        tracking_enabled: document.getElementById('tracking-enabled').checked,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      status.textContent = data.error || 'Failed to save settings';
+      status.style.color = '#D42B2B';
+      return;
+    }
+
+    status.textContent = 'Settings saved';
+    status.style.color = '#4CAF50';
+  } catch (err) {
+    status.textContent = 'Network error';
+    status.style.color = '#D42B2B';
+  }
+}
+
+// Umami tracking init (shared with public page)
+async function initUmamiTracking() {
+  try {
+    const res = await fetch('/api/settings/analytics');
+    if (!res.ok) return;
+    const settings = await res.json();
+    if (!settings.tracking_enabled || !settings.umami_script_url || !settings.umami_website_id) return;
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.defer = true;
+    script.src = settings.umami_script_url;
+    script.setAttribute('data-website-id', settings.umami_website_id);
+    document.head.appendChild(script);
+  } catch (_) {}
+}
+
 // Helpers
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -158,6 +221,8 @@ function escapeHtml(str) {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('login-form').addEventListener('submit', handleLogin);
   document.getElementById('upload-form').addEventListener('submit', handleUpload);
+  document.getElementById('settings-form').addEventListener('submit', handleSaveSettings);
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
+  initUmamiTracking();
   checkAuth();
 });
