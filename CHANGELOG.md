@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/martynvdijke/redchef/compare/v1.9.0...v1.10.0) (2026-07-20)
+
+
+### Features
+
+* tip amounts, Gotify push notifications, and admin test email ([1f401c3](https://github.com/martynvdijke/redchef/commit/1f401c38ccd574cbb4be4856d6901aefd6175131))
+
 # [1.9.0](https://github.com/martynvdijke/redchef/compare/v1.8.0...v1.9.0) (2026-07-20)
 
 
