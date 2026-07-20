@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/martynvdijke/redchef/compare/v1.2.0...v1.3.0) (2026-07-20)
+
+
+### Features
+
+* first-run admin setup flow with web UI ([66de4ad](https://github.com/martynvdijke/redchef/commit/66de4ad3cb58962510d80eb001b555101978f807))
+
 # [1.2.0](https://github.com/martynvdijke/redchef/compare/v1.1.3...v1.2.0) (2026-07-20)
 
 
