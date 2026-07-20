@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/martynvdijke/redchef/compare/v1.1.0...v1.1.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* change docker container port from 8080 to 6270 ([51599e9](https://github.com/martynvdijke/redchef/commit/51599e9ecd757a0b83af04c11c65580188bce3f4))
+
 # [1.1.0](https://github.com/martynvdijke/redchef/compare/v1.0.0...v1.1.0) (2026-07-20)
 
 
