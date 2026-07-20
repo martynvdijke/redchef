@@ -1,3 +1,15 @@
+# [1.9.0](https://github.com/martynvdijke/redchef/compare/v1.8.0...v1.9.0) (2026-07-20)
+
+
+### Bug Fixes
+
+* restore unlock flow, add mock iDEAL + invoice emails + share route + admin fixes ([fab596c](https://github.com/martynvdijke/redchef/commit/fab596c7171860f8115c0f5ecbde0f0088ae1890))
+
+
+### Features
+
+* email notification to all users when new post is uploaded ([ffab43d](https://github.com/martynvdijke/redchef/commit/ffab43daa2118c7635cdaebc9b807ede813517ae))
+
 # [1.8.0](https://github.com/martynvdijke/redchef/compare/v1.7.0...v1.8.0) (2026-07-20)
 
 
