@@ -19,9 +19,13 @@ type AnalyticsSettingsRequest struct {
 	TrackingEnabled bool   `json:"tracking_enabled"`
 }
 
-const uploadDir = "uploads"
+var uploadDir string
 
 func init() {
+	uploadDir = os.Getenv("UPLOAD_DIR")
+	if uploadDir == "" {
+		uploadDir = "uploads"
+	}
 	os.MkdirAll(uploadDir, 0755)
 }
 

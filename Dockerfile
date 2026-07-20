@@ -12,6 +12,6 @@ WORKDIR /app
 COPY --from=builder /build/redchef .
 COPY --from=builder /build/static ./static
 EXPOSE 6270
-VOLUME ["/app/uploads"]
-ENV PORT=6270 DB_PATH=/app/redchef.db
+VOLUME ["/app/media", "/db"]
+ENV PORT=6270 DB_PATH=/db/redchef.db UPLOAD_DIR=/app/media
 ENTRYPOINT ["/app/redchef"]

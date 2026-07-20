@@ -7,11 +7,12 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: admin
       PORT: "6270"
-      DB_PATH: /app/redchef.db
+      DB_PATH: /db/redchef.db
+      UPLOAD_DIR: /app/media
     volumes:
-      - redchef_uploads:/app/uploads
-      - redchef_data:/app/data
+      - redchef_media:/app/media
+      - redchef_db:/db
 
 volumes:
-  redchef_uploads:
-  redchef_data:
+  redchef_media:
+  redchef_db:

@@ -37,7 +37,8 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Static file server for uploads (served at /uploads/)
-	uploadFS := http.FileServer(http.Dir("uploads"))
+	uploadDir := getEnv("UPLOAD_DIR", "uploads")
+	uploadFS := http.FileServer(http.Dir(uploadDir))
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", uploadFS))
 
 	// Public API
