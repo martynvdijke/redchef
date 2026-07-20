@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/martynvdijke/redchef/compare/v1.0.0...v1.1.0) (2026-07-20)
+
+
+### Features
+
+* add admin-configurable Umami analytics settings ([9b3180c](https://github.com/martynvdijke/redchef/commit/9b3180cfa2fc626474ef5ddeb89f03acf662b551))
+
 # 1.0.0 (2026-07-19)
 
 
