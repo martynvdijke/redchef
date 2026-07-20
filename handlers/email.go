@@ -166,3 +166,44 @@ Deze content is nu voor jou ontgrendeld. Veel kijkplezier!
 		log.Printf("[email] Failed to send item invoice to %s: %v", email, err)
 	}
 }
+
+// SendNewPostNotification emails all registered users about a new post.
+// The creator (adminUserID) is skipped so they don't notify themselves.
+func SendNewPostNotification(post db.Post, adminUserID int64) {
+	users, err := db.ListUsers()
+	if err != nil {
+		log.Printf("[email] Failed to list users for new-post notification: %v", err)
+		return
+	}
+
+	postURL := fmt.Sprintf("https://redchef.example.com/posts/%d", post.ID)
+	subject := fmt.Sprintf("🍳 Nieuwe post: %s — Red Copper Chef", post.Title)
+	description := post.Description
+	if description == "" {
+		description = "(geen beschrijving)"
+	}
+	body := fmt.Sprintf(`Hoi!
+
+Er is een nieuwe post verschenen op Red Copper Chef!
+
+──────────────────────────────
+%s
+──────────────────────────────
+%s
+
+Bekijk de post hier:
+%s
+
+— Red Copper Chef 🍳`, post.Title, description, postURL)
+
+	for _, u := range users {
+		if u.ID == adminUserID {
+			continue
+		}
+		go func(email string) {
+			if err := SendEmail(email, subject, body); err != nil {
+				log.Printf("[email] Failed to send new-post notification to %s: %v", email, err)
+			}
+		}(u.Email)
+	}
+}

@@ -113,6 +113,9 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Notify all users about the new post (async, best-effort)
+	go SendNewPostNotification(*post, getUserID(r))
+
 	// Process media asynchronously
 	ProcessWG.Add(1)
 	go func() {
