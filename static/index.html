@@ -52,7 +52,7 @@
     <div class="paywall-card">
       <h3>👑 Unlock All Content</h3>
       <p>Get access to every recipe, video, and behind-the-stove moment.</p>
-      <button class="btn-unlock" id="btn-unlock">Unlock Everything — $5.00/mo</button>
+      <button class="btn-unlock" id="btn-unlock">👑 Word lid — €4,99/maand via iDEAL</button>
     </div>
   </div>
 
@@ -136,6 +136,39 @@
       <div class="auth-switch">
         Already have an account? <a id="switch-to-login">Sign in</a>
       </div>
+    </div>
+  </div>
+
+  <!-- iDEAL Modal (mock payment — always succeeds) -->
+  <div class="modal-overlay" id="ideal-modal" style="display:none;">
+    <div class="modal">
+      <button class="modal-close" id="ideal-modal-close">✕</button>
+      <div class="modal-header">
+        <span class="modal-icon" id="modal-icon">👑</span>
+        <h2 id="modal-title">Word Royal Member</h2>
+        <p class="modal-subtitle" id="modal-subtitle">Onbeperkt toegang voor <strong>€4,99/maand</strong></p>
+      </div>
+      <form class="modal-form" id="ideal-form">
+        <div class="modal-form-group">
+          <label>Kies je bank</label>
+          <select class="modal-input" id="bank-select">
+            <option value="">— Selecteer —</option>
+            <option value="ING">🏦 ING</option>
+            <option value="Rabobank">🏦 Rabobank</option>
+            <option value="ABN AMRO">🏦 ABN AMRO</option>
+            <option value="SNS">🏦 SNS</option>
+            <option value="KNAB">🏦 KNAB</option>
+            <option value="Triodos">🏦 Triodos</option>
+            <option value="Revolut">🏦 Revolut</option>
+            <option value="bunq">🏦 bunq</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-subscribe btn-subscribe-modal" id="ideal-pay-btn">
+          <span class="btn-subscribe-icon">🏦</span>
+          <span id="modal-btn-text">Betaal €4,99 met iDEAL</span>
+        </button>
+        <p class="modal-note" id="modal-note">🔒 Parodie — er wordt niks afgeschreven</p>
+      </form>
     </div>
   </div>
 

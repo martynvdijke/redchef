@@ -7,6 +7,7 @@ const API = {
   logout: '/api/auth/logout',
   posts: '/api/posts',
   unlock: '/api/pay/unlock',
+  payItem: '/api/pay/item',
   analytics: '/api/settings/analytics',
   favourites: '/api/favourites',
 };
@@ -166,33 +167,89 @@ function closeRegisterModal() {
   $('register-modal').style.display = 'none';
 }
 
-// ── Paywall ──
+// ── Paywall (mock iDEAL — always succeeds) ──
 
-async function handleUnlock() {
+let purchaseMode = 'subscription'; // 'subscription' | 'item'
+let purchasePostId = null;
+
+function handleUnlock() {
   if (!currentUser) {
     openLoginModal();
     return;
   }
+  purchaseMode = 'subscription';
+  purchasePostId = null;
+  openIdealModal();
+}
+
+function buyItem(postId, mediaType) {
+  if (!currentUser) {
+    openLoginModal();
+    return;
+  }
+  purchaseMode = 'item';
+  purchasePostId = postId;
+  const label = mediaType === 'video' ? '€0,20' : '€0,05';
+  const itemLabel = mediaType === 'video' ? 'video' : 'foto';
+  $('modal-icon').textContent = '🔓';
+  $('modal-title').textContent = 'Ontgrendel deze ' + itemLabel;
+  $('modal-subtitle').innerHTML = `Betaal <strong>${label}</strong> — eenmalig, direct toegang`;
+  $('modal-btn-text').textContent = `Betaal ${label} met iDEAL`;
+  openIdealModal();
+}
+
+function openIdealModal() {
+  if (purchaseMode === 'subscription') {
+    $('modal-icon').textContent = '👑';
+    $('modal-title').textContent = 'Word Royal Member';
+    $('modal-subtitle').innerHTML = 'Onbeperkt toegang voor <strong>€4,99/maand</strong>';
+    $('modal-btn-text').textContent = 'Betaal €4,99 met iDEAL';
+  }
+  $('ideal-modal').style.display = 'flex';
+  $('bank-select').value = '';
+}
+
+function closeIdealModal() {
+  $('ideal-modal').style.display = 'none';
+  purchaseMode = 'subscription';
+  purchasePostId = null;
+}
+
+async function handleIdealSubmit(e) {
+  e.preventDefault();
+
+  const bank = $('bank-select').value;
+  if (!bank) {
+    showToast('❌ Selecteer een bank om te betalen.', true);
+    return;
+  }
+
+  const isItem = purchaseMode === 'item' && purchasePostId;
+  const payBtn = $('ideal-pay-btn');
+  payBtn.disabled = true;
+  $('modal-btn-text').textContent = `Verwerken via ${bank}...`;
 
   try {
-    $('btn-unlock').disabled = true;
-    $('btn-unlock').textContent = 'Processing...';
-    const res = await fetch(API.unlock, {
+    const res = await fetch(isItem ? API.payItem : API.unlock, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(isItem ? { bank, post_id: purchasePostId } : { bank }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed');
 
-    showToast('👑 ' + data.message);
-    currentUser.paid = true;
-    showLoggedIn();
+    closeIdealModal();
+    showToast((isItem ? '🏦 ' : '👑 ') + data.message);
+    if (!isItem) {
+      currentUser.paid = true;
+      showLoggedIn();
+    }
     loadContent();
   } catch (err) {
-    showToast('❌ Failed to process. Try again.');
+    showToast('❌ Betaling mislukt — probeer het opnieuw.', true);
   } finally {
-    $('btn-unlock').disabled = false;
-    $('btn-unlock').textContent = 'Unlock Everything — $5.00/mo';
+    payBtn.disabled = false;
+    $('modal-btn-text').textContent = 'Betaal €4,99 met iDEAL';
   }
 }
 
@@ -200,6 +257,14 @@ async function handleUnlock() {
 
 async function loadContent() {
   const feed = $('feed');
+
+  // Shared single-post view (/posts/{id})
+  const sharedMatch = window.location.pathname.match(/^\/posts\/(\d+)$/);
+  if (sharedMatch) {
+    await loadSinglePost(parseInt(sharedMatch[1], 10));
+    return;
+  }
+
   const params = new URLSearchParams();
 
   const sort = $('filter-sort').value;
@@ -261,7 +326,7 @@ function renderPostsView() {
   const isPaid = currentUser && (currentUser.paid || currentUser.role === 'admin');
 
   feed.innerHTML = posts.map((post, idx) => {
-    const unlocked = !post.locked || isPaid;
+    const unlocked = post.unlocked !== undefined ? post.unlocked : (!post.locked || isPaid);
     const mediaUrl = `/uploads/${post.filename}`;
     const thumbnailUrl = post.thumbnail && post.thumbnail !== post.filename
       ? `/uploads/${post.thumbnail}`
@@ -282,14 +347,17 @@ function renderPostsView() {
         </div>
       `;
     } else if (post.locked && !unlocked) {
+      const itemPrice = post.media_type === 'video' ? '€0,20' : '€0,05';
+      const itemLabel = post.media_type === 'video' ? 'video' : 'foto';
       mediaHtml = `
         <div class="post-media-locked">
           <img class="post-media-blur" src="${thumbnailUrl}" alt="" loading="lazy"
                onerror="this.style.display='none';this.parentElement.style.background='#222'">
           <div class="post-locked-overlay">
             <div class="post-locked-icon">🔒</div>
-            <div class="post-locked-text">Members Only</div>
-            <p style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin:4px 0;">Unlock all content with membership</p>
+            <div class="post-locked-text">Alleen voor leden</div>
+            <button class="post-locked-btn" onclick="buyItem(${post.id}, '${post.media_type}')">Koop deze ${itemLabel} — ${itemPrice}</button>
+            <button class="post-locked-sub" onclick="handleUnlock()">👑 Word lid — €4,99/maand</button>
           </div>
         </div>
       `;
@@ -380,6 +448,38 @@ function renderPostsView() {
 
   // Load comment counts for all posts
   posts.forEach(post => loadCommentCount(post.id));
+}
+
+// ── Shared single-post view ──
+
+async function loadSinglePost(postId) {
+  const feed = $('feed');
+  try {
+    const res = await fetch(API.posts + '/' + postId);
+    if (!res.ok) throw new Error('Not found');
+    const post = await res.json();
+
+    posts = [post];
+    $('stat-posts').textContent = '1';
+
+    // Hide feed controls in single-post mode
+    const filterBar = document.querySelector('.filter-bar');
+    const tabsBar = document.querySelector('.tabs-bar');
+    if (filterBar) filterBar.style.display = 'none';
+    if (tabsBar) tabsBar.style.display = 'none';
+
+    renderPostsView();
+    feed.insertAdjacentHTML('afterbegin',
+      '<div style="margin-bottom:1rem;"><a class="filter-btn" style="text-decoration:none;" href="/">← Alle posts bekijken</a></div>');
+  } catch (_) {
+    feed.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <p>Deze post bestaat niet (meer).</p>
+        <p style="margin-top:1rem;"><a class="filter-btn" style="text-decoration:none;" href="/">← Terug naar de feed</a></p>
+      </div>
+    `;
+  }
 }
 
 // ── Favourites ──
@@ -588,7 +688,7 @@ function renderMediaView() {
 
   feed.innerHTML = posts.map(post => {
     const mediaUrl = `/uploads/${post.filename}`;
-    const unlocked = !post.locked || isPaid;
+    const unlocked = post.unlocked !== undefined ? post.unlocked : (!post.locked || isPaid);
 
     let mediaEl;
     if (post.processing) {
@@ -705,6 +805,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Paywall
   $('btn-unlock').addEventListener('click', handleUnlock);
+
+  // iDEAL modal
+  $('ideal-modal-close').addEventListener('click', closeIdealModal);
+  $('ideal-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeIdealModal();
+  });
+  $('ideal-form').addEventListener('submit', handleIdealSubmit);
 
   // Filter
   $('btn-filter-apply').addEventListener('click', loadContent);

@@ -44,7 +44,8 @@ func main() {
 	mux.Handle("GET /api/auth/me", handlers.AuthMiddleware(http.HandlerFunc(handlers.Me)))
 
 	// Paywall API
-	mux.Handle("POST /api/pay/unlock", handlers.RequireAuth(http.HandlerFunc(handlers.PayUnlock)))
+	mux.Handle("POST /api/pay/unlock", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.PayUnlock))))
+	mux.Handle("POST /api/pay/item", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.PayItem))))
 
 	// Public API (auth-aware via middleware)
 	publicMux := http.NewServeMux()
@@ -60,7 +61,7 @@ func main() {
 	authMux.HandleFunc("POST /api/posts/{id}/comments", handlers.CreateComment)
 	authMux.HandleFunc("POST /api/posts/{id}/favourite", handlers.ToggleFavourite)
 	authMux.HandleFunc("POST /api/posts/{id}/tip", handlers.CreateTip)
-	mux.Handle("POST /api/posts/", handlers.RequireAuth(authMux))
+	mux.Handle("POST /api/posts/", handlers.AuthMiddleware(handlers.RequireAuth(authMux)))
 
 	// Admin API (authenticated as admin)
 	adminMux := http.NewServeMux()
@@ -76,9 +77,10 @@ func main() {
 	adminMux.HandleFunc("PUT /api/admin/settings/analytics", handlers.AdminUpdateAnalyticsSettings)
 	adminMux.HandleFunc("GET /api/admin/settings/email", handlers.AdminGetEmailSettings)
 	adminMux.HandleFunc("PUT /api/admin/settings/email", handlers.AdminUpdateEmailSettings)
+	adminMux.HandleFunc("GET /api/admin/comments", handlers.AdminListComments)
 	adminMux.HandleFunc("DELETE /api/admin/comments/{id}", handlers.AdminDeleteComment)
 	adminMux.HandleFunc("PUT /api/admin/posts/{id}/links", handlers.AdminSetPostLinks)
-	adminMux.HandleFunc("GET /api/admin/posts/{id}/links", handlers.AdminSetPostLinks)
+	adminMux.HandleFunc("GET /api/admin/posts/{id}/links", handlers.AdminGetPostLinks)
 	mux.Handle("GET /api/admin/", handlers.AdminAuth(adminMux))
 	mux.Handle("POST /api/admin/", handlers.AdminAuth(adminMux))
 	mux.Handle("DELETE /api/admin/", handlers.AdminAuth(adminMux))
@@ -103,6 +105,14 @@ func main() {
 			return
 		}
 		r.URL.Path = "/setup.html"
+		staticHandler.ServeHTTP(w, r)
+	})
+
+	// Shareable post page — serves the SPA, which renders the single post.
+	// Note: path is rewritten to "/" (not "/index.html") because FileServer
+	// 301-redirects /index.html to / and the post id would be lost.
+	mux.HandleFunc("GET /posts/{id}", func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = "/"
 		staticHandler.ServeHTTP(w, r)
 	})
 

@@ -6,6 +6,7 @@ const API = {
   posts: '/api/admin/posts',
   upload: '/api/admin/upload',
   users: '/api/admin/users',
+  comments: '/api/admin/comments',
   settings: '/api/admin/settings/analytics',
   emailSettings: '/api/admin/settings/email',
   setupStatus: '/api/setup/status',
@@ -77,6 +78,7 @@ function showDashboard() {
   document.getElementById('dashboard-section').style.display = 'block';
   loadPosts();
   loadUsers();
+  loadComments();
   loadSettings();
   loadEmailSettings();
 }
@@ -144,6 +146,8 @@ function handleUpload(e) {
 }
 
 // Load posts
+let allPosts = [];
+
 async function loadPosts() {
   const tbody = document.getElementById('posts-table-body');
   tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#888;">Loading...</td></tr>';
@@ -152,6 +156,7 @@ async function loadPosts() {
     const res = await fetch(API.posts);
     if (!res.ok) throw new Error('Failed');
     const posts = await res.json();
+    allPosts = posts;
 
     if (posts.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#888;">No posts yet. Upload something!</td></tr>';
@@ -179,6 +184,7 @@ async function loadPosts() {
         </td>
         <td>${new Date(post.created_at).toLocaleDateString()}</td>
         <td>
+          <button class="lock-btn" onclick="openEditModal(${post.id})">✏️ Edit</button>
           <button class="lock-btn" onclick="openLinksModal(${post.id})">🔗 Links</button>
           <button class="delete-btn" onclick="deletePost(${post.id})">Delete</button>
         </td>
@@ -215,6 +221,96 @@ async function deletePost(id) {
     loadPosts();
   } catch (err) {
     alert('Failed to delete post');
+  }
+}
+
+// ── Edit Post ──
+
+let currentEditPostId = null;
+
+function openEditModal(postId) {
+  const post = allPosts.find(p => p.id === postId);
+  if (!post) return;
+  currentEditPostId = postId;
+  document.getElementById('edit-title').value = post.title || '';
+  document.getElementById('edit-description').value = post.description || '';
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').style.display = 'none';
+  currentEditPostId = null;
+}
+
+async function handleEditSubmit(e) {
+  e.preventDefault();
+  if (!currentEditPostId) return;
+
+  const title = document.getElementById('edit-title').value.trim();
+  const description = document.getElementById('edit-description').value;
+  if (!title) return;
+
+  try {
+    const res = await fetch(`${API.posts}/${currentEditPostId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      showToast('❌ ' + (data.error || 'Failed to update post'));
+      return;
+    }
+    showToast('✅ Post updated');
+    closeEditModal();
+    loadPosts();
+  } catch (_) {
+    showToast('❌ Failed to update post');
+  }
+}
+
+// ── Comments Management ──
+
+async function loadComments() {
+  const tbody = document.getElementById('comments-table-body');
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#888;">Loading...</td></tr>';
+
+  try {
+    const res = await fetch(API.comments);
+    if (!res.ok) throw new Error('Failed');
+    const comments = await res.json();
+
+    if (comments.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#888;">No comments yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = comments.map(c => `
+      <tr>
+        <td title="Post #${c.post_id}">${escapeHtml(c.post_title || ('Post #' + c.post_id))}</td>
+        <td>${escapeHtml(c.username || 'User')}</td>
+        <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(c.body)}">${escapeHtml(c.body)}</td>
+        <td>${new Date(c.created_at).toLocaleDateString()}</td>
+        <td>
+          <button class="delete-btn" onclick="deleteComment(${c.id})">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#D42B2B;">Failed to load comments</td></tr>';
+  }
+}
+
+async function deleteComment(id) {
+  if (!confirm('Delete this comment?')) return;
+
+  try {
+    const res = await fetch(`${API.comments}/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed');
+    showToast('🗑️ Comment deleted');
+    loadComments();
+  } catch (err) {
+    showToast('❌ Failed to delete comment');
   }
 }
 
@@ -499,6 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('upload-form').addEventListener('submit', handleUpload);
   document.getElementById('settings-form').addEventListener('submit', handleSaveSettings);
   document.getElementById('email-settings-form').addEventListener('submit', handleSaveEmailSettings);
+  document.getElementById('edit-form').addEventListener('submit', handleEditSubmit);
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
   initUmamiTracking();
   checkAuth();

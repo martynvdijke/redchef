@@ -60,7 +60,11 @@ func ListPosts(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]postResponse, len(posts))
 	for i, p := range posts {
-		unlocked := !p.Locked || isPaid
+		purchased := false
+		if userID > 0 {
+			purchased, _ = db.HasUserPurchased(userID, p.ID)
+		}
+		unlocked := !p.Locked || isPaid || purchased
 		var mediaURL *string
 		if unlocked {
 			url := "/uploads/" + p.Filename
@@ -113,6 +117,10 @@ func GetPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	unlocked := !post.Locked || isPaid
+	if !unlocked && userID > 0 {
+		purchased, _ := db.HasUserPurchased(userID, post.ID)
+		unlocked = purchased
+	}
 	favourited, _ := db.GetUserFavourited(userID, post.ID)
 	favCount, _ := db.GetFavouriteCount(post.ID)
 	tipCount, _ := db.GetTipCount(post.ID)

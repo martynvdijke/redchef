@@ -58,6 +58,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Notify the new member their account was created (async, best-effort)
+	go SendWelcomeEmail(req.Email)
+
 	// Auto-login: create session
 	session, err := db.CreateUserSession(userID)
 	if err != nil {

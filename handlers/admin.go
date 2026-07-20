@@ -139,7 +139,9 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdatePostRequest struct {
-	Locked *bool `json:"locked"`
+	Locked      *bool   `json:"locked"`
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
 }
 
 func AdminUpdatePost(w http.ResponseWriter, r *http.Request) {
@@ -156,12 +158,45 @@ func AdminUpdatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Locked == nil {
-		jsonError(w, "locked field is required", http.StatusBadRequest)
+	if req.Locked == nil && req.Title == nil && req.Description == nil {
+		jsonError(w, "at least one field (locked, title, description) is required", http.StatusBadRequest)
 		return
 	}
 
-	post, err := db.UpdatePostLock(id, *req.Locked)
+	// Verify post exists first
+	if _, err := db.GetPost(id); err != nil {
+		jsonError(w, "post not found", http.StatusNotFound)
+		return
+	}
+
+	if req.Locked != nil {
+		if _, err := db.UpdatePostLock(id, *req.Locked); err != nil {
+			jsonError(w, "failed to update lock state", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.Title != nil || req.Description != nil {
+		post, _ := db.GetPost(id)
+		title := post.Title
+		description := post.Description
+		if req.Title != nil {
+			title = strings.TrimSpace(*req.Title)
+			if title == "" {
+				jsonError(w, "title cannot be empty", http.StatusBadRequest)
+				return
+			}
+		}
+		if req.Description != nil {
+			description = *req.Description
+		}
+		if _, err := db.UpdatePostDetails(id, title, description); err != nil {
+			jsonError(w, "failed to update post", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	post, err := db.GetPost(id)
 	if err != nil {
 		jsonError(w, "post not found", http.StatusNotFound)
 		return
@@ -415,7 +450,42 @@ func SetupStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ── Comments (admin) ──
+
+func AdminListComments(w http.ResponseWriter, r *http.Request) {
+	comments, err := db.GetAllComments()
+	if err != nil {
+		jsonError(w, "failed to list comments", http.StatusInternalServerError)
+		return
+	}
+	if comments == nil {
+		comments = []db.AdminComment{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(comments)
+}
+
 // ── Linked Posts (admin) ──
+
+func AdminGetPostLinks(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	postID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		jsonError(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+
+	links, err := db.GetPostLinks(postID)
+	if err != nil {
+		jsonError(w, "failed to get links", http.StatusInternalServerError)
+		return
+	}
+	if links == nil {
+		links = []db.PostLink{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(links)
+}
 
 func AdminListAllPostsSimple(w http.ResponseWriter, r *http.Request) {
 	posts, err := db.GetPosts(nil)

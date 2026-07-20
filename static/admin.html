@@ -468,9 +468,48 @@
         </table>
       </div>
     </div>
+    <!-- Comments Section -->
+    <div class="upload-section" id="comments-section" style="margin-top:2rem;">
+      <h2>💬 Comments</h2>
+      <div style="overflow-x:auto;">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Post</th>
+              <th>Author</th>
+              <th>Comment</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="comments-table-body">
+            <tr><td colspan="5" style="text-align:center;padding:2rem;color:#888;">Loading comments...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
-  <!-- Linked Posts Modal -->
+  <!-- Edit Post Modal -->
+  <div class="auth-modal-overlay" id="edit-modal" style="display:none;">
+    <div class="auth-modal" style="max-width:500px;">
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+      <h2>✏️ Edit Post</h2>
+      <p class="auth-subtitle">Update the title and description</p>
+      <form id="edit-form">
+        <div class="form-group">
+          <label>Title</label>
+          <input type="text" id="edit-title" required>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="edit-description" rows="3"></textarea>
+        </div>
+        <button type="submit" class="btn-primary" style="margin-top:0;">Save Changes</button>
+      </form>
+      <button class="nav-auth-btn nav-auth-btn-outline" onclick="closeEditModal()" style="margin-top:8px;">Cancel</button>
+    </div>
+  </div>
   <div class="auth-modal-overlay" id="links-modal" style="display:none;">
     <div class="auth-modal" style="max-width:500px;">
       <button class="modal-close" onclick="closeLinksModal()">✕</button>

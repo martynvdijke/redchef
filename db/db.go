@@ -205,6 +205,17 @@ func migrate() error {
 			FOREIGN KEY (linked_post_id) REFERENCES posts(id)
 		);
 
+		CREATE TABLE IF NOT EXISTS purchases (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			post_id INTEGER NOT NULL,
+			price_cents INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, post_id),
+			FOREIGN KEY (user_id) REFERENCES users(id),
+			FOREIGN KEY (post_id) REFERENCES posts(id)
+		);
+
 		CREATE TABLE IF NOT EXISTS email_settings (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			smtp_host TEXT NOT NULL DEFAULT '',
@@ -579,6 +590,15 @@ func UpdatePostLock(id int64, locked bool) (*Post, error) {
 	return GetPost(id)
 }
 
+// UpdatePostDetails updates the title and description of a post.
+func UpdatePostDetails(id int64, title, description string) (*Post, error) {
+	_, err := DB.Exec("UPDATE posts SET title = ?, description = ? WHERE id = ?", title, description, id)
+	if err != nil {
+		return nil, err
+	}
+	return GetPost(id)
+}
+
 func UpdatePostProcessing(id int64, filename, thumbnail string) error {
 	if DB == nil {
 		return fmt.Errorf("database not initialized")
@@ -724,6 +744,42 @@ func DeleteComment(id int64) error {
 	return err
 }
 
+// AdminComment is a comment enriched with its post title for admin listing.
+type AdminComment struct {
+	Comment
+	PostTitle string `json:"post_title"`
+}
+
+// GetAllComments returns every comment across all posts, newest first.
+func GetAllComments() ([]AdminComment, error) {
+	rows, err := DB.Query(`
+		SELECT c.id, c.post_id, c.user_id, u.email, c.parent_id, c.body, c.created_at, p.title
+		FROM comments c
+		JOIN users u ON c.user_id = u.id
+		JOIN posts p ON c.post_id = p.id
+		ORDER BY c.created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []AdminComment
+	for rows.Next() {
+		var c AdminComment
+		var parentID sql.NullInt64
+		var createdAt string
+		if err := rows.Scan(&c.ID, &c.PostID, &c.UserID, &c.Username, &parentID, &c.Body, &createdAt, &c.PostTitle); err != nil {
+			return nil, err
+		}
+		if parentID.Valid {
+			c.ParentID = &parentID.Int64
+		}
+		c.CreatedAt, _ = parseTime(createdAt)
+		comments = append(comments, c)
+	}
+	return comments, nil
+}
+
 // ── Favourites ──
 
 func GetUserFavourited(userID, postID int64) (bool, error) {
@@ -795,6 +851,23 @@ func HasUserTipped(userID, postID int64) (bool, error) {
 func CreateTip(userID, postID int64) error {
 	_, err := DB.Exec("INSERT INTO tips (user_id, post_id) VALUES (?, ?)", userID, postID)
 	return err
+}
+
+// ── Purchases (per-item mock payments) ──
+
+// CreatePurchase records a per-item unlock. Duplicate purchases are ignored.
+func CreatePurchase(userID, postID int64, priceCents int) error {
+	_, err := DB.Exec(
+		"INSERT OR IGNORE INTO purchases (user_id, post_id, price_cents) VALUES (?, ?, ?)",
+		userID, postID, priceCents,
+	)
+	return err
+}
+
+func HasUserPurchased(userID, postID int64) (bool, error) {
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM purchases WHERE user_id = ? AND post_id = ?", userID, postID).Scan(&count)
+	return count > 0, err
 }
 
 // ── Linked Posts ──
