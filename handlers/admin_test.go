@@ -4,17 +4,30 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"redchef/db"
 )
+
+// uploadResponse mirrors the AdminUpload response
+type uploadResponse struct {
+	ID         int64     `json:"id"`
+	Title      string    `json:"title"`
+	MediaType  string    `json:"media_type"`
+	Locked     bool      `json:"locked"`
+	Processing bool      `json:"processing"`
+	Message    string    `json:"message"`
+	CreatedAt  time.Time `json:"created_at"`
+}
 
 func setupHandlerTest(t *testing.T) (cleanup func()) {
 	t.Helper()
@@ -23,12 +36,10 @@ func setupHandlerTest(t *testing.T) (cleanup func()) {
 		t.Fatalf("init db: %v", err)
 	}
 
-	// Set upload dir to temp
 	uploadDir = "/tmp/redchef_handler_test_media"
 	os.MkdirAll(uploadDir, 0755)
 
-	// Create admin user for auth
-	err = db.CreateUser("admin", "test1234")
+	_, err = db.CreateUser("admin", "test1234")
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
@@ -46,13 +57,22 @@ func setupHandlerTest(t *testing.T) (cleanup func()) {
 func authenticatedRequest(t *testing.T, method, target string, body io.Reader) *http.Request {
 	t.Helper()
 	req := httptest.NewRequest(method, target, body)
-	// Create session and set cookie
-	session, err := db.CreateSession(1)
+
+	// Create user session
+	user, err := db.GetUserByUsername("admin")
 	if err != nil {
-		t.Fatalf("create session: %v", err)
+		// Use email lookup if username fails
+		user, err = db.GetUserByEmail("admin")
+		if err != nil {
+			t.Fatalf("get admin user: %v", err)
+		}
+	}
+	session, err := db.CreateUserSession(user.ID)
+	if err != nil {
+		t.Fatalf("create user session: %v", err)
 	}
 	req.AddCookie(&http.Cookie{
-		Name:  "admin_token",
+		Name:  "session_token",
 		Value: session.Token,
 	})
 	return req
@@ -60,37 +80,13 @@ func authenticatedRequest(t *testing.T, method, target string, body io.Reader) *
 
 func createTestImage(t *testing.T) []byte {
 	t.Helper()
-	// Minimal valid JPEG (1x1 pixel)
-	data := []byte{
-		0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
-		0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43,
-		0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09,
-		0x09, 0x08, 0x0a, 0x0c, 0x14, 0x0d, 0x0c, 0x0b, 0x0b, 0x0c, 0x19, 0x12,
-		0x13, 0x0f, 0x14, 0x1d, 0x1a, 0x1f, 0x1e, 0x1d, 0x1a, 0x1c, 0x1c, 0x20,
-		0x24, 0x2e, 0x27, 0x20, 0x22, 0x2c, 0x23, 0x1c, 0x1c, 0x28, 0x37, 0x29,
-		0x2c, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1f, 0x27, 0x39, 0x3d, 0x38, 0x32,
-		0x3c, 0x2e, 0x33, 0x34, 0x32, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01,
-		0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xff, 0xc4, 0x00, 0x1f, 0x00, 0x00,
-		0x01, 0x05, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a,
-		0x0b, 0xff, 0xc4, 0x00, 0xb5, 0x10, 0x00, 0x02, 0x01, 0x03, 0x03, 0x02,
-		0x04, 0x03, 0x05, 0x05, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x01, 0x02, 0x03, 0x11, 0x04, 0x12, 0x05, 0x21, 0x31, 0x06, 0x13, 0x41,
-		0x51, 0x07, 0x61, 0x71, 0x81, 0x14, 0x91, 0xa1, 0xb1, 0xc1, 0xd1, 0x23,
-		0x33, 0x15, 0x52, 0xf0, 0x24, 0x62, 0x72, 0x82, 0x09, 0x0a, 0x16, 0x17,
-		0x18, 0x19, 0x1a, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x34, 0x35, 0x36,
-		0x37, 0x38, 0x39, 0x3a, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a,
-		0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x63, 0x64, 0x65, 0x66,
-		0x67, 0x68, 0x69, 0x6a, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a,
-		0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x92, 0x93, 0x94, 0x95,
-		0x96, 0x97, 0x98, 0x99, 0x9a, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8,
-		0xa9, 0xaa, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xc2,
-		0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 0xc9, 0xca, 0xd2, 0xd3, 0xd4, 0xd5,
-		0xd6, 0xd7, 0xd8, 0xd9, 0xda, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
-		0xe8, 0xe9, 0xea, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9,
-		0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00, 0xff, 0xd9,
+	buf := new(bytes.Buffer)
+	img := image.NewNRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.NRGBA{255, 0, 0, 255})
+	if err := jpeg.Encode(buf, img, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatalf("encode test image: %v", err)
 	}
-	return data
+	return buf.Bytes()
 }
 
 func buildUploadRequest(t *testing.T, title, description, locked string, fileData []byte, filename string) *http.Request {
@@ -134,32 +130,26 @@ func TestAdminUpload_Success(t *testing.T) {
 		t.Fatalf("expected 201 Created, got %d: %s", resp.Code, resp.Body.String())
 	}
 
-	var post db.Post
-	if err := json.NewDecoder(resp.Body).Decode(&post); err != nil {
+	var result uploadResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if post.Title != "My Upload" {
-		t.Errorf("expected title 'My Upload', got %q", post.Title)
+	if result.Title != "My Upload" {
+		t.Errorf("expected title 'My Upload', got %q", result.Title)
 	}
-	if post.MediaType != "photo" {
-		t.Errorf("expected media_type 'photo', got %q", post.MediaType)
+	if result.MediaType != "photo" {
+		t.Errorf("expected media_type 'photo', got %q", result.MediaType)
 	}
-	if !post.Locked {
+	if !result.Locked {
 		t.Error("expected locked=true")
 	}
-	if post.CreatedAt.IsZero() {
-		t.Error("created_at is zero time — date parsing broken")
+	if !result.Processing {
+		t.Error("expected processing=true")
 	}
-
-	// Verify file was saved
-	filePath := filepath.Join(uploadDir, post.Filename)
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		t.Errorf("uploaded file not found at %s", filePath)
+	if result.CreatedAt.IsZero() {
+		t.Error("created_at is zero time")
 	}
-
-	// Clean up test file
-	os.Remove(filePath)
 }
 
 func TestAdminUpload_LockedField(t *testing.T) {
@@ -189,44 +179,39 @@ func TestAdminUpload_LockedField(t *testing.T) {
 				t.Fatalf("expected 201, got %d: %s", resp.Code, resp.Body.String())
 			}
 
-			var post db.Post
-			json.NewDecoder(resp.Body).Decode(&post)
-			if post.Locked != tt.wantLocked {
-				t.Errorf("locked=%v, want %v", post.Locked, tt.wantLocked)
+			var result uploadResponse
+			json.NewDecoder(resp.Body).Decode(&result)
+			if result.Locked != tt.wantLocked {
+				t.Errorf("locked=%v, want %v", result.Locked, tt.wantLocked)
 			}
-
-			// Cleanup
-			db.DeletePost(post.ID)
-			os.Remove(filepath.Join(uploadDir, post.Filename))
 		})
 	}
 }
 
-func createPostForTest(t *testing.T) *db.Post {
+func createPostForTest(t *testing.T) *uploadResponse {
 	t.Helper()
 	imgData := createTestImage(t)
 	req := buildUploadRequest(t, "Test Post", "desc", "true", imgData, "test.jpg")
 	resp := httptest.NewRecorder()
 	AdminUpload(resp, req)
-	var post db.Post
-	json.NewDecoder(resp.Body).Decode(&post)
-	return &post
+	var result uploadResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result
 }
 
 func TestAdminUpdatePost_Lock(t *testing.T) {
 	cleanup := setupHandlerTest(t)
 	defer cleanup()
 
-	post := createPostForTest(t)
-	defer db.DeletePost(post.ID)
-	defer os.Remove(filepath.Join(uploadDir, post.Filename))
+	upload := createPostForTest(t)
+	defer db.DeletePost(upload.ID)
 
-	if !post.Locked {
+	if !upload.Locked {
 		t.Fatal("expected post to be locked initially")
 	}
 
 	// Unlock
-	idStr := fmt.Sprintf("%d", post.ID)
+	idStr := fmt.Sprintf("%d", upload.ID)
 	body := bytes.NewReader([]byte(`{"locked":false}`))
 	req := authenticatedRequest(t, "PATCH", "/api/admin/posts/"+idStr, body)
 	req.SetPathValue("id", idStr)
@@ -315,19 +300,15 @@ func TestAdminUpload_AutoTitle(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", resp.Code, resp.Body.String())
 	}
 
-	var post db.Post
-	json.NewDecoder(resp.Body).Decode(&post)
-	if post.Title == "" {
+	var result uploadResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result.Title == "" {
 		t.Error("expected auto-generated title, got empty")
 	}
-	// Title should be today's date, e.g. "July 20, 2026"
 	today := time.Now().Format("January 2, 2006")
-	if post.Title != today {
-		t.Errorf("expected title %q, got %q", today, post.Title)
+	if result.Title != today {
+		t.Errorf("expected title %q, got %q", today, result.Title)
 	}
-
-	db.DeletePost(post.ID)
-	os.Remove(filepath.Join(uploadDir, post.Filename))
 }
 
 func TestAdminUpload_MissingFile(t *testing.T) {
@@ -371,14 +352,11 @@ func TestAdminUpload_VideoType(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", resp.Code, resp.Body.String())
 	}
 
-	var post db.Post
-	json.NewDecoder(resp.Body).Decode(&post)
-	if post.MediaType != "video" {
-		t.Errorf("expected media_type 'video', got %q", post.MediaType)
+	var result uploadResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result.MediaType != "video" {
+		t.Errorf("expected media_type 'video', got %q", result.MediaType)
 	}
-
-	db.DeletePost(post.ID)
-	os.Remove(filepath.Join(uploadDir, post.Filename))
 }
 
 func TestAdminUpload_WebPSupport(t *testing.T) {
@@ -394,12 +372,9 @@ func TestAdminUpload_WebPSupport(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", resp.Code, resp.Body.String())
 	}
 
-	var post db.Post
-	json.NewDecoder(resp.Body).Decode(&post)
-	if post.MediaType != "photo" {
-		t.Errorf("expected media_type 'photo', got %q", post.MediaType)
+	var result uploadResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result.MediaType != "photo" {
+		t.Errorf("expected media_type 'photo', got %q", result.MediaType)
 	}
-
-	db.DeletePost(post.ID)
-	os.Remove(filepath.Join(uploadDir, post.Filename))
 }

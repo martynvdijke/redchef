@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 go build -o redchef .
 # Stage 2: Runtime
 FROM alpine:3.19
 
-RUN apk add --no-cache wget
+RUN apk add --no-cache wget ffmpeg
 WORKDIR /app
 COPY --from=builder /build/redchef .
 COPY --from=builder /build/static ./static

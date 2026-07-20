@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,10 +31,12 @@ func init() {
 	os.MkdirAll(uploadDir, 0755)
 }
 
+// ── Posts ──
+
 func AdminListPosts(w http.ResponseWriter, r *http.Request) {
-	posts, err := db.GetPosts()
+	posts, err := db.GetPosts(nil)
 	if err != nil {
-		http.Error(w, `{"error":"failed to list posts"}`, http.StatusInternalServerError)
+		jsonError(w, "failed to list posts", http.StatusInternalServerError)
 		return
 	}
 	if posts == nil {
@@ -44,17 +47,16 @@ func AdminListPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 func AdminUpload(w http.ResponseWriter, r *http.Request) {
-	// Limit upload size to 50MB
 	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
 
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, `{"error":"file too large or invalid form"}`, http.StatusBadRequest)
+		jsonError(w, "file too large or invalid form", http.StatusBadRequest)
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, `{"error":"missing file"}`, http.StatusBadRequest)
+		jsonError(w, "missing file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
@@ -68,7 +70,6 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 		title = time.Now().Format("January 2, 2006")
 	}
 
-	// Determine media type from extension
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	var mediaType string
 	switch ext {
@@ -77,36 +78,49 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 	case ".mp4", ".webm", ".mov":
 		mediaType = "video"
 	default:
-		http.Error(w, `{"error":"unsupported file type: `+ext+`"}`, http.StatusBadRequest)
+		jsonError(w, "unsupported file type: "+ext, http.StatusBadRequest)
 		return
 	}
 
-	// Generate unique filename
-	filename := fmt.Sprintf("%d%s", generateID(), ext)
+	// Save original file temporarily
+	filename := fmt.Sprintf("_raw_%d%s", generateID(), ext)
 	dst, err := os.Create(filepath.Join(uploadDir, filename))
 	if err != nil {
-		http.Error(w, `{"error":"failed to save file"}`, http.StatusInternalServerError)
+		jsonError(w, "failed to save file", http.StatusInternalServerError)
 		return
 	}
-	defer dst.Close()
+	io.Copy(dst, file)
+	dst.Close()
 
-	if _, err := io.Copy(dst, file); err != nil {
-		http.Error(w, `{"error":"failed to write file"}`, http.StatusInternalServerError)
-		return
-	}
-
-	// Generate thumbnail path (same file for now, frontend can use it directly)
-	thumbnail := filename
-
-	post, err := db.CreatePost(title, description, mediaType, filename, thumbnail, locked)
+	// Create post immediately with processing=true
+	post, err := db.CreatePost(title, description, mediaType, filename, filename, locked)
 	if err != nil {
-		http.Error(w, `{"error":"failed to create post"}`, http.StatusInternalServerError)
+		os.Remove(filepath.Join(uploadDir, filename))
+		jsonError(w, "failed to create post", http.StatusInternalServerError)
 		return
 	}
+
+	// Process media asynchronously
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[media] Panic processing post %d: %v", post.ID, r)
+			}
+		}()
+		processMedia(post.ID, filename, mediaType, ext)
+	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(post)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":         post.ID,
+		"title":      post.Title,
+		"media_type": post.MediaType,
+		"locked":     post.Locked,
+		"created_at": post.CreatedAt,
+		"processing": true,
+		"message":    "Upload accepted, processing...",
+	})
 }
 
 type UpdatePostRequest struct {
@@ -117,24 +131,24 @@ func AdminUpdatePost(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		jsonError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
 	var req UpdatePostRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		jsonError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if req.Locked == nil {
-		http.Error(w, `{"error":"locked field is required"}`, http.StatusBadRequest)
+		jsonError(w, "locked field is required", http.StatusBadRequest)
 		return
 	}
 
 	post, err := db.UpdatePostLock(id, *req.Locked)
 	if err != nil {
-		http.Error(w, `{"error":"post not found"}`, http.StatusNotFound)
+		jsonError(w, "post not found", http.StatusNotFound)
 		return
 	}
 
@@ -146,26 +160,27 @@ func AdminDeletePost(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		jsonError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	// Get post to find filename
 	post, err := db.GetPost(id)
 	if err != nil {
-		http.Error(w, `{"error":"post not found"}`, http.StatusNotFound)
+		jsonError(w, "post not found", http.StatusNotFound)
 		return
 	}
 
-	// Delete file from disk
+	// Delete files from disk
 	filePath := filepath.Join(uploadDir, post.Filename)
 	os.Remove(filePath)
 	if post.Thumbnail != "" && post.Thumbnail != post.Filename {
 		os.Remove(filepath.Join(uploadDir, post.Thumbnail))
 	}
+	// Also remove raw file if exists
+	os.Remove(filepath.Join(uploadDir, fmt.Sprintf("_raw_%d*", id)))
 
 	if err := db.DeletePost(id); err != nil {
-		http.Error(w, `{"error":"failed to delete post"}`, http.StatusInternalServerError)
+		jsonError(w, "failed to delete post", http.StatusInternalServerError)
 		return
 	}
 
@@ -173,10 +188,77 @@ func AdminDeletePost(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"ok":true}`))
 }
 
+// ── Users (admin) ──
+
+func AdminListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := db.ListUsers()
+	if err != nil {
+		jsonError(w, "failed to list users", http.StatusInternalServerError)
+		return
+	}
+	if users == nil {
+		users = []db.User{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
+
+type UpdateUserRequest struct {
+	Paid *bool `json:"paid"`
+}
+
+func AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var req UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Paid == nil {
+		jsonError(w, "paid field is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := db.UpdateUserPaid(id, *req.Paid); err != nil {
+		jsonError(w, "failed to update user", http.StatusInternalServerError)
+		return
+	}
+
+	user, _ := db.GetUserByID(id)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
+func AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	if err := db.DeleteUser(id); err != nil {
+		jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"ok":true}`))
+}
+
+// ── Analytics Settings ──
+
 func AdminGetAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := db.GetAnalyticsSettings()
 	if err != nil {
-		http.Error(w, `{"error":"failed to get settings"}`, http.StatusInternalServerError)
+		jsonError(w, "failed to get settings", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -186,19 +268,19 @@ func AdminGetAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
 func AdminUpdateAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
 	var req AnalyticsSettingsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		jsonError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if req.UmamiScriptURL != "" {
 		if !strings.HasPrefix(req.UmamiScriptURL, "https://") && !strings.HasPrefix(req.UmamiScriptURL, "http://") {
-			http.Error(w, `{"error":"script URL must start with http:// or https://"}`, http.StatusBadRequest)
+			jsonError(w, "script URL must start with http:// or https://", http.StatusBadRequest)
 			return
 		}
 	}
 
 	if err := db.UpdateAnalyticsSettings(req.UmamiScriptURL, req.UmamiWebsiteID, req.TrackingEnabled); err != nil {
-		http.Error(w, `{"error":"failed to save settings"}`, http.StatusInternalServerError)
+		jsonError(w, "failed to save settings", http.StatusInternalServerError)
 		return
 	}
 
@@ -207,7 +289,7 @@ func AdminUpdateAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(settings)
 }
 
-// ── Setup (first-run admin creation) ──
+// ── Setup ──
 
 func Setup(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -216,68 +298,51 @@ func Setup(w http.ResponseWriter, r *http.Request) {
 		ConfirmPassword string `json:"confirm_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		jsonError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Check if admin already exists
 	hasUsers, err := db.HasUsers()
 	if err != nil {
-		http.Error(w, `{"error":"failed to check setup status"}`, http.StatusInternalServerError)
+		jsonError(w, "failed to check setup status", http.StatusInternalServerError)
 		return
 	}
 	if hasUsers {
-		http.Error(w, `{"error":"admin already configured"}`, http.StatusForbidden)
+		jsonError(w, "admin already configured", http.StatusForbidden)
 		return
 	}
 
-	// Validate
 	if req.Username == "" {
-		http.Error(w, `{"error":"username is required"}`, http.StatusBadRequest)
+		jsonError(w, "username is required", http.StatusBadRequest)
 		return
 	}
 	if req.Password == "" {
-		http.Error(w, `{"error":"password is required"}`, http.StatusBadRequest)
+		jsonError(w, "password is required", http.StatusBadRequest)
 		return
 	}
 	if len(req.Password) < 4 {
-		http.Error(w, `{"error":"password must be at least 4 characters"}`, http.StatusBadRequest)
+		jsonError(w, "password must be at least 4 characters", http.StatusBadRequest)
 		return
 	}
 	if req.Password != req.ConfirmPassword {
-		http.Error(w, `{"error":"passwords do not match"}`, http.StatusBadRequest)
+		jsonError(w, "passwords do not match", http.StatusBadRequest)
 		return
 	}
 
-	// Create user
-	if err := db.CreateUser(req.Username, req.Password); err != nil {
-		http.Error(w, `{"error":"failed to create admin user"}`, http.StatusInternalServerError)
-		return
-	}
-
-	// Auto-login: get user ID
-	userID, _, err := db.GetUserByUsername(req.Username)
+	// Use username as email too (backward compat)
+	userID, err := db.CreateUser(req.Username, req.Password)
 	if err != nil {
-		http.Error(w, `{"error":"failed to verify admin user"}`, http.StatusInternalServerError)
+		jsonError(w, "failed to create admin user", http.StatusInternalServerError)
 		return
 	}
 
-	// Create session
-	session, err := db.CreateSession(userID)
+	session, err := db.CreateUserSession(userID)
 	if err != nil {
-		http.Error(w, `{"error":"failed to create session"}`, http.StatusInternalServerError)
+		jsonError(w, "failed to create session", http.StatusInternalServerError)
 		return
 	}
 
-	// Set session cookie (same name used by Login handler)
-	http.SetCookie(w, &http.Cookie{
-		Name:     "admin_token",
-		Value:    session.Token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   86400,
-	})
+	setSessionCookie(w, session.Token)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -287,12 +352,10 @@ func Setup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ── Setup status check ──
-
 func SetupStatus(w http.ResponseWriter, r *http.Request) {
 	hasUsers, err := db.HasUsers()
 	if err != nil {
-		http.Error(w, `{"error":"failed to check"}`, http.StatusInternalServerError)
+		jsonError(w, "failed to check", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -301,10 +364,45 @@ func SetupStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Simple ID generator (not crypto, just for filenames)
+// ── ID Generator ──
+
 var idCounter int64
 
 func generateID() int64 {
 	idCounter++
 	return idCounter + int64(os.Getpid())*1000000
+}
+
+// ── Media Processing ──
+
+func processMedia(postID int64, rawFilename, mediaType, ext string) {
+	log.Printf("[media] Processing post %d (%s)...", postID, mediaType)
+
+	srcPath := filepath.Join(uploadDir, rawFilename)
+	defer os.Remove(srcPath) // Always clean up raw file
+
+	var processedFilename, thumbnailFilename string
+	var err error
+
+	switch mediaType {
+	case "photo":
+		processedFilename, err = processImage(srcPath, ext)
+	case "video":
+		processedFilename, thumbnailFilename, err = processVideo(srcPath)
+	default:
+		err = fmt.Errorf("unknown media type: %s", mediaType)
+	}
+
+	if err != nil {
+		log.Printf("[media] Error processing post %d: %v", postID, err)
+		// Mark post with original file so it's at least viewable
+		db.UpdatePostProcessing(postID, rawFilename, rawFilename)
+		return
+	}
+
+	if err := db.UpdatePostProcessing(postID, processedFilename, thumbnailFilename); err != nil {
+		log.Printf("[media] Error updating post %d after processing: %v", postID, err)
+	}
+
+	log.Printf("[media] Post %d processed: %s", postID, processedFilename)
 }

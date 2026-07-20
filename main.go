@@ -19,19 +19,16 @@ var staticFiles embed.FS
 var Version = "0.1.0"
 
 func main() {
-	// Configuration from environment
 	port := getEnv("PORT", "8080")
 	dbPath := getEnv("DB_PATH", "/db/redchef.db")
 
-	// Initialize database
 	if err := db.Init(dbPath); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// Set up routes
 	mux := http.NewServeMux()
 
-	// Static file server for uploads (served at /uploads/)
+	// Static file server for uploads
 	uploadDir := getEnv("UPLOAD_DIR", "/app/media")
 	uploadFS := http.FileServer(http.Dir(uploadDir))
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", uploadFS))
@@ -40,48 +37,62 @@ func main() {
 	mux.HandleFunc("POST /api/setup", handlers.Setup)
 	mux.HandleFunc("GET /api/setup/status", handlers.SetupStatus)
 
-	// Public API
-	mux.HandleFunc("GET /api/posts", handlers.ListPosts)
-	mux.HandleFunc("GET /api/posts/{id}", handlers.GetPost)
-	mux.HandleFunc("POST /api/subscribe", handlers.Subscribe)
+	// Auth API (public)
+	mux.HandleFunc("POST /api/auth/register", handlers.Register)
+	mux.HandleFunc("POST /api/auth/login", handlers.Login)
+	mux.HandleFunc("POST /api/auth/logout", handlers.Logout)
+	mux.HandleFunc("GET /api/auth/me", handlers.Me)
 
-	// Admin API
+	// Paywall API
+	mux.Handle("POST /api/pay/unlock", handlers.RequireAuth(http.HandlerFunc(handlers.PayUnlock)))
+
+	// Public API (auth-aware via middleware)
+	publicMux := http.NewServeMux()
+	publicMux.HandleFunc("GET /api/posts", handlers.ListPosts)
+	publicMux.HandleFunc("GET /api/posts/{id}", handlers.GetPost)
+	publicMux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
+	mux.Handle("GET /api/", handlers.AuthMiddleware(publicMux))
+
+	// Admin API (authenticated as admin)
+	adminMux := http.NewServeMux()
+	adminMux.HandleFunc("GET /api/admin/posts", handlers.AdminListPosts)
+	adminMux.HandleFunc("POST /api/admin/upload", handlers.AdminUpload)
+	adminMux.HandleFunc("DELETE /api/admin/posts/{id}", handlers.AdminDeletePost)
+	adminMux.HandleFunc("PATCH /api/admin/posts/{id}", handlers.AdminUpdatePost)
+	adminMux.HandleFunc("GET /api/admin/users", handlers.AdminListUsers)
+	adminMux.HandleFunc("PATCH /api/admin/users/{id}", handlers.AdminUpdateUser)
+	adminMux.HandleFunc("DELETE /api/admin/users/{id}", handlers.AdminDeleteUser)
+	adminMux.HandleFunc("GET /api/admin/settings/analytics", handlers.AdminGetAnalyticsSettings)
+	adminMux.HandleFunc("PUT /api/admin/settings/analytics", handlers.AdminUpdateAnalyticsSettings)
+	mux.Handle("GET /api/admin/", handlers.AdminAuth(adminMux))
+	mux.Handle("POST /api/admin/", handlers.AdminAuth(adminMux))
+	mux.Handle("DELETE /api/admin/", handlers.AdminAuth(adminMux))
+	mux.Handle("PATCH /api/admin/", handlers.AdminAuth(adminMux))
+	mux.Handle("PUT /api/admin/", handlers.AdminAuth(adminMux))
+
+	// Old admin login/logout (redirect to new auth)
 	mux.HandleFunc("POST /api/admin/login", handlers.Login)
 	mux.HandleFunc("POST /api/admin/logout", handlers.Logout)
 
-	// Public settings (no auth)
-	mux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
-
-	// Admin API (authenticated)
-	mux.Handle("GET /api/admin/posts", handlers.AdminAuth(http.HandlerFunc(handlers.AdminListPosts)))
-	mux.Handle("POST /api/admin/upload", handlers.AdminAuth(http.HandlerFunc(handlers.AdminUpload)))
-	mux.Handle("DELETE /api/admin/posts/{id}", handlers.AdminAuth(http.HandlerFunc(handlers.AdminDeletePost)))
-	mux.Handle("PATCH /api/admin/posts/{id}", handlers.AdminAuth(http.HandlerFunc(handlers.AdminUpdatePost)))
-	mux.Handle("GET /api/admin/settings/analytics", handlers.AdminAuth(http.HandlerFunc(handlers.AdminGetAnalyticsSettings)))
-	mux.Handle("PUT /api/admin/settings/analytics", handlers.AdminAuth(http.HandlerFunc(handlers.AdminUpdateAnalyticsSettings)))
-
-	// SPA fallback: serve embedded static files for all non-API routes
+	// SPA fallback
 	staticSub, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		log.Fatalf("Failed to create static sub filesystem: %v", err)
 	}
 	staticHandler = http.FileServer(http.FS(staticSub))
 
-	// Setup page: redirect to admin if admin exists, serve setup.html if not
 	mux.HandleFunc("GET /setup", func(w http.ResponseWriter, r *http.Request) {
 		hasUsers, err := db.HasUsers()
 		if err == nil && hasUsers {
 			http.Redirect(w, r, "/admin.html", http.StatusFound)
 			return
 		}
-		// serve setup.html from embedded files
 		r.URL.Path = "/setup.html"
 		staticHandler.ServeHTTP(w, r)
 	})
 
 	mux.Handle("GET /", staticHandler)
 
-	// Wrap with CORS and logging middleware
 	handler := withMiddleware(mux)
 
 	log.Printf("RedChef starting on :%s", port)
@@ -92,10 +103,9 @@ func main() {
 
 func withMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// CORS headers for development
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

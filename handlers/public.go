@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -16,99 +15,107 @@ type PublicAnalyticsResponse struct {
 }
 
 func ListPosts(w http.ResponseWriter, r *http.Request) {
-	posts, err := db.GetPosts()
+	filter := &db.PostFilter{
+		Sort:     r.URL.Query().Get("sort"),
+		Type:     r.URL.Query().Get("type"),
+		DateFrom: r.URL.Query().Get("date_from"),
+		DateTo:   r.URL.Query().Get("date_to"),
+	}
+
+	// Validate type param
+	if filter.Type != "" && filter.Type != "photo" && filter.Type != "video" {
+		jsonError(w, "invalid type filter: must be 'photo' or 'video'", http.StatusBadRequest)
+		return
+	}
+
+	posts, err := db.GetPosts(filter)
 	if err != nil {
-		http.Error(w, `{"error":"failed to list posts"}`, http.StatusInternalServerError)
+		jsonError(w, "failed to list posts", http.StatusInternalServerError)
 		return
 	}
 	if posts == nil {
 		posts = []db.Post{}
 	}
+
+	// Determine user's access
+	userID := getUserID(r)
+	isPaid := false
+	if userID > 0 {
+		user, err := db.GetUserByID(userID)
+		if err == nil {
+			isPaid = user.Paid || user.Role == "admin"
+		}
+	}
+
+	// Enrich response with access info
+	type postResponse struct {
+		db.Post
+		MediaURL *string `json:"media_url"`
+		Unlocked bool    `json:"unlocked"`
+	}
+
+	responses := make([]postResponse, len(posts))
+	for i, p := range posts {
+		unlocked := !p.Locked || isPaid
+		var mediaURL *string
+		if unlocked {
+			url := "/uploads/" + p.Filename
+			mediaURL = &url
+		}
+		responses[i] = postResponse{
+			Post:     p,
+			MediaURL: mediaURL,
+			Unlocked: unlocked,
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(posts)
+	json.NewEncoder(w).Encode(responses)
 }
 
 func GetPost(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		jsonError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
 	post, err := db.GetPost(id)
 	if err != nil {
-		http.Error(w, `{"error":"post not found"}`, http.StatusNotFound)
+		jsonError(w, "post not found", http.StatusNotFound)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(post)
-}
-
-type SubscribeRequest struct {
-	PostID *int64 `json:"post_id,omitempty"`
-}
-
-type SubscribeResponse struct {
-	Ok      bool   `json:"ok"`
-	Message string `json:"message"`
-	Charged string `json:"charged"`
-}
-
-func Subscribe(w http.ResponseWriter, r *http.Request) {
-	var req SubscribeRequest
-	json.NewDecoder(r.Body).Decode(&req)
-
-	if req.PostID != nil {
-		// Per-item purchase — set individual unlock cookie
-		post, err := db.GetPost(*req.PostID)
-		if err != nil {
-			http.Error(w, `{"error":"post not found"}`, http.StatusNotFound)
-			return
+	// Check access
+	userID := getUserID(r)
+	isPaid := false
+	if userID > 0 {
+		user, err := db.GetUserByID(userID)
+		if err == nil {
+			isPaid = user.Paid || user.Role == "admin"
 		}
-
-		http.SetCookie(w, &http.Cookie{
-			Name:   fmt.Sprintf("unlocked_%d", *req.PostID),
-			Value:  "1",
-			Path:   "/",
-			MaxAge: 86400 * 365,
-		})
-
-		price := "0.05"
-		if post.MediaType == "video" {
-			price = "0.20"
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(SubscribeResponse{
-			Ok:      true,
-			Message: "🔓 Ontgrendeld! Geniet ervan.",
-			Charged: price,
-		})
-		return
 	}
 
-	// Subscription — set royal member cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:   "royal_member",
-		Value:  "1",
-		Path:   "/",
-		MaxAge: 86400 * 365, // 1 year
-	})
+	unlocked := !post.Locked || isPaid
+	type postDetail struct {
+		db.Post
+		MediaURL *string `json:"media_url"`
+		Unlocked bool    `json:"unlocked"`
+	}
+	response := postDetail{Post: *post, Unlocked: unlocked}
+	if unlocked {
+		url := "/uploads/" + post.Filename
+		response.MediaURL = &url
+	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(SubscribeResponse{
-		Ok:      true,
-		Message: "👑 Welkom bij het Royal Inner Circle!",
-		Charged: "4.99",
-	})
+	json.NewEncoder(w).Encode(response)
 }
 
 func PublicGetAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := db.GetAnalyticsSettings()
 	if err != nil {
-		// Return safe defaults instead of erroring
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(PublicAnalyticsResponse{})
 		return
@@ -120,5 +127,3 @@ func PublicGetAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
 		TrackingEnabled: settings.TrackingEnabled,
 	})
 }
-
-

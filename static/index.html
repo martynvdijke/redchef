@@ -15,7 +15,16 @@
       <span class="nav-icon">🍳</span>
       <span class="nav-name">Red <span>Copper</span> Chef</span>
     </a>
-    <a href="/admin.html" class="nav-admin-link" title="Admin">👨‍🍳 Admin</a>
+    <div class="nav-auth" id="nav-auth">
+      <button class="nav-auth-btn nav-auth-btn-outline" id="btn-login" style="display:none;">Sign In</button>
+      <button class="nav-auth-btn" id="btn-register" style="display:none;">Join</button>
+      <div class="nav-user" id="nav-user" style="display:none;">
+        <span class="nav-user-email" id="nav-email"></span>
+        <span class="nav-user-badge nav-user-badge-paid" id="nav-paid-badge" style="display:none;">👑 Member</span>
+        <a href="/admin.html" class="nav-user-badge nav-user-badge-admin" id="nav-admin-link" style="display:none;">Admin</a>
+        <button class="nav-auth-btn nav-auth-btn-outline" id="btn-logout">Sign Out</button>
+      </div>
+    </div>
   </nav>
 
   <!-- Cover Banner -->
@@ -33,23 +42,35 @@
       <p class="profile-bio">5-minute gourmet meals. Zero shame. Kitchen royalty. 🔥</p>
       <div class="profile-stats">
         <span class="stat"><strong id="stat-posts">0</strong> posts</span>
-        <span class="stat"><strong id="stat-likes">12.8K</strong> likes</span>
         <span class="stat"><strong>📍</strong> Flavortown</span>
       </div>
     </div>
-    <div class="profile-actions" id="profile-actions">
-      <button class="btn-subscribe" id="btn-subscribe-hero">
-        <span class="btn-subscribe-icon">👑</span>
-        <span class="btn-subscribe-text">Word Royal Member — €4,99<span class="btn-subscribe-per">/maand</span></span>
-      </button>
-      <button class="btn-subscribed" id="btn-subscribed-hero" style="display:none;" disabled>
-        Royal Member ✓<span class="btn-member-badge"> 👑</span>
-      </button>
-    </div>
-    <div class="profile-benefits">
-      Alle recepten &nbsp;•&nbsp; Exclusieve content &nbsp;•&nbsp; Behind-the-stove toegang
-    </div>
   </header>
+
+  <!-- Paywall Banner (shown to non-paid authenticated users) -->
+  <div class="paywall-banner" id="paywall-banner" style="display:none;">
+    <div class="paywall-card">
+      <h3>👑 Unlock All Content</h3>
+      <p>Get access to every recipe, video, and behind-the-stove moment.</p>
+      <button class="btn-unlock" id="btn-unlock">Unlock Everything — $5.00/mo</button>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <select class="filter-select" id="filter-sort">
+      <option value="newest">Newest First</option>
+      <option value="oldest">Oldest First</option>
+    </select>
+    <select class="filter-select" id="filter-type">
+      <option value="">All Types</option>
+      <option value="photo">Photos</option>
+      <option value="video">Videos</option>
+    </select>
+    <input type="date" class="filter-input" id="filter-date-from" title="From date">
+    <input type="date" class="filter-input" id="filter-date-to" title="To date">
+    <button class="filter-btn" id="btn-filter-apply">Filter</button>
+  </div>
 
   <!-- Tabs -->
   <div class="tabs-bar">
@@ -65,36 +86,55 @@
     </div>
   </main>
 
-  <!-- iDeal Modal -->
-  <div class="modal-overlay" id="subscribe-modal" style="display:none;">
-    <div class="modal">
-      <button class="modal-close" id="modal-close">✕</button>
-      <div class="modal-header">
-        <span class="modal-icon" id="modal-icon">👑</span>
-        <h2 id="modal-title">Word Royal Member</h2>
-        <p class="modal-subtitle" id="modal-subtitle">Onbeperkt toegang voor <strong>€4,99/maand</strong></p>
-      </div>
-      <form class="modal-form" id="subscribe-form">
-        <div class="modal-form-group">
-          <label>Kies je bank</label>
-          <select class="modal-input" id="bank-select">
-            <option value="">— Selecteer —</option>
-            <option value="ING">🏦 ING</option>
-            <option value="Rabobank">🏦 Rabobank</option>
-            <option value="ABN AMRO">🏦 ABN AMRO</option>
-            <option value="SNS">🏦 SNS</option>
-            <option value="KNAB">🏦 KNAB</option>
-            <option value="Triodos">🏦 Triodos</option>
-            <option value="Revolut">🏦 Revolut</option>
-            <option value="bunq">🏦 bunq</option>
-          </select>
+  <!-- Login Modal -->
+  <div class="auth-modal-overlay" id="login-modal" style="display:none;">
+    <div class="auth-modal">
+      <button class="modal-close" id="login-modal-close">✕</button>
+      <h2>👨‍🍳 Welcome Back</h2>
+      <p class="auth-subtitle">Sign in to access exclusive content</p>
+      <form id="login-form">
+        <div class="form-group">
+          <label>Email or Username</label>
+          <input type="text" id="login-email" placeholder="your@email.com" autocomplete="username" required>
         </div>
-        <button type="submit" class="btn-subscribe btn-subscribe-modal" id="modal-action-btn">
-          <span class="btn-subscribe-icon">🏦</span>
-          <span id="modal-btn-text">Betaal €4,99 met iDeal</span>
-        </button>
-        <p class="modal-note" id="modal-note">🔒 Parodie — er wordt niks afgeschreven</p>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="Enter password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-primary">Sign In</button>
+        <div class="auth-error" id="login-error"></div>
       </form>
+      <div class="auth-switch">
+        Don't have an account? <a id="switch-to-register">Join now</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Register Modal -->
+  <div class="auth-modal-overlay" id="register-modal" style="display:none;">
+    <div class="auth-modal">
+      <button class="modal-close" id="register-modal-close">✕</button>
+      <h2>🍳 Join the Kitchen</h2>
+      <p class="auth-subtitle">Create an account for free</p>
+      <form id="register-form">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="register-email" placeholder="your@email.com" autocomplete="email" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="register-password" placeholder="At least 6 characters" autocomplete="new-password" minlength="6" required>
+        </div>
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <input type="password" id="register-confirm" placeholder="Repeat your password" autocomplete="new-password" required>
+        </div>
+        <button type="submit" class="btn-primary">Create Account</button>
+        <div class="auth-error" id="register-error"></div>
+      </form>
+      <div class="auth-switch">
+        Already have an account? <a id="switch-to-login">Sign in</a>
+      </div>
     </div>
   </div>
 

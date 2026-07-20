@@ -20,7 +20,17 @@ type Post struct {
 	Filename    string    `json:"filename"`
 	Thumbnail   string    `json:"thumbnail"`
 	Locked      bool      `json:"locked"`
+	Processing  bool      `json:"processing"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+type User struct {
+	ID           int64     `json:"id"`
+	Email        string    `json:"email"`
+	PasswordHash string    `json:"-"`
+	Role         string    `json:"role"`
+	Paid         bool      `json:"paid"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type AnalyticsSettings struct {
@@ -38,6 +48,13 @@ type Session struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+type UserSession struct {
+	ID        int64     `json:"id"`
+	Token     string    `json:"token"`
+	UserID    int64     `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 var DB *sql.DB
 
 func Init(dbPath string) error {
@@ -52,6 +69,11 @@ func Init(dbPath string) error {
 		return fmt.Errorf("enable wal: %w", err)
 	}
 
+	// Set busy timeout so writes wait instead of immediately failing with SQLITE_BUSY
+	if _, err := DB.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		return fmt.Errorf("set busy timeout: %w", err)
+	}
+
 	if err := migrate(); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
@@ -64,7 +86,11 @@ func migrate() error {
 		CREATE TABLE IF NOT EXISTS users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT UNIQUE NOT NULL,
-			password_hash TEXT NOT NULL
+			password_hash TEXT NOT NULL,
+			email TEXT DEFAULT '',
+			role TEXT DEFAULT 'normal',
+			paid INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 
 		CREATE TABLE IF NOT EXISTS posts (
@@ -75,6 +101,7 @@ func migrate() error {
 			filename TEXT NOT NULL,
 			thumbnail TEXT DEFAULT '',
 			locked INTEGER DEFAULT 1,
+			processing INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 
@@ -83,6 +110,14 @@ func migrate() error {
 			token TEXT UNIQUE NOT NULL,
 			user_id INTEGER NOT NULL,
 			expires_at DATETIME NOT NULL,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS user_sessions (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			token TEXT UNIQUE NOT NULL,
+			user_id INTEGER NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		);
 
@@ -104,8 +139,21 @@ func migrate() error {
 			return err
 		}
 	}
+
+	// Migrate existing users: set first user as admin if no roles set
+	var adminCount int
+	DB.QueryRow("SELECT COUNT(*) FROM users WHERE role != 'normal'").Scan(&adminCount)
+	if adminCount == 0 {
+		// Get first user, set as admin + paid
+		DB.Exec("UPDATE users SET role = 'admin', paid = 1 WHERE id = (SELECT id FROM users ORDER BY id ASC LIMIT 1)")
+		// Set email from username for all users missing email
+		DB.Exec("UPDATE users SET email = username || '@local' WHERE email = '' OR email IS NULL")
+	}
+
 	return err
 }
+
+// ── User Queries ──
 
 func HasUsers() (bool, error) {
 	var count int
@@ -116,38 +164,174 @@ func HasUsers() (bool, error) {
 	return count > 0, nil
 }
 
-func CreateUser(username, password string) error {
+func CreateUser(email, password string) (int64, error) {
 	hash, err := hashPassword(password)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	_, err = DB.Exec("INSERT INTO users (username, password_hash) VALUES (?, ?)", username, hash)
+
+	// Determine role: first user = admin, rest = normal
+	var count int
+	DB.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+	role := "normal"
+	paid := 0
+	if count == 0 {
+		role = "admin"
+		paid = 1
+	}
+
+	res, err := DB.Exec(
+		"INSERT INTO users (username, password_hash, email, role, paid) VALUES (?, ?, ?, ?, ?)",
+		email, hash, email, role, paid,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func GetUserByEmail(email string) (*User, error) {
+	u := &User{}
+	var paidInt int
+	var createdAt string
+	err := DB.QueryRow(
+		"SELECT id, email, password_hash, role, paid, created_at FROM users WHERE email = ?",
+		email,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &paidInt, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	u.Paid = paidInt == 1
+	u.CreatedAt, _ = parseTime(createdAt)
+	return u, nil
+}
+
+func GetUserByUsername(username string) (*User, error) {
+	u := &User{}
+	var paidInt int
+	var createdAt string
+	err := DB.QueryRow(
+		"SELECT id, email, password_hash, role, paid, created_at FROM users WHERE username = ?",
+		username,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &paidInt, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	u.Paid = paidInt == 1
+	u.CreatedAt, _ = parseTime(createdAt)
+	return u, nil
+}
+
+func GetUserByID(id int64) (*User, error) {
+	u := &User{}
+	var paidInt int
+	var createdAt string
+	err := DB.QueryRow(
+		"SELECT id, email, password_hash, role, paid, created_at FROM users WHERE id = ?",
+		id,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &paidInt, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	u.Paid = paidInt == 1
+	u.CreatedAt, _ = parseTime(createdAt)
+	return u, nil
+}
+
+func ListUsers() ([]User, error) {
+	rows, err := DB.Query("SELECT id, email, role, paid, created_at FROM users ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		var paidInt int
+		var createdAt string
+		err := rows.Scan(&u.ID, &u.Email, &u.Role, &paidInt, &createdAt)
+		if err != nil {
+			return nil, err
+		}
+		u.Paid = paidInt == 1
+		u.CreatedAt, _ = parseTime(createdAt)
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func UpdateUserPaid(id int64, paid bool) error {
+	paidInt := 0
+	if paid {
+		paidInt = 1
+	}
+	_, err := DB.Exec("UPDATE users SET paid = ? WHERE id = ?", paidInt, id)
 	return err
 }
 
-func SeedAdmin(username, password string) error {
-	has, err := HasUsers()
+func DeleteUser(id int64) error {
+	// Prevent deleting the last admin
+	var adminCount int
+	DB.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin' AND id != ?", id).Scan(&adminCount)
+	if adminCount == 0 {
+		return fmt.Errorf("cannot delete the last admin user")
+	}
+	_, err := DB.Exec("DELETE FROM user_sessions WHERE user_id = ?", id)
 	if err != nil {
 		return err
 	}
-	if has {
-		return nil
-	}
-
-	return CreateUser(username, password)
-}
-
-func GetUserByUsername(username string) (int64, string, error) {
-	var id int64
-	var hash string
-	err := DB.QueryRow("SELECT id, password_hash FROM users WHERE username = ?", username).Scan(&id, &hash)
+	_, err = DB.Exec("DELETE FROM sessions WHERE user_id = ?", id)
 	if err != nil {
-		return 0, "", err
+		return err
 	}
-	return id, hash, nil
+	_, err = DB.Exec("DELETE FROM users WHERE id = ?", id)
+	return err
 }
 
-// Sessions
+// ── User Sessions ──
+
+func CreateUserSession(userID int64) (*UserSession, error) {
+	token := generateToken(32)
+	_, err := DB.Exec(
+		"INSERT INTO user_sessions (token, user_id) VALUES (?, ?)",
+		token, userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &UserSession{
+		Token:     token,
+		UserID:    userID,
+		CreatedAt: time.Now(),
+	}, nil
+}
+
+func GetUserSession(token string) (*UserSession, error) {
+	s := &UserSession{}
+	var createdAt string
+	err := DB.QueryRow(
+		"SELECT id, token, user_id, created_at FROM user_sessions WHERE token = ?",
+		token,
+	).Scan(&s.ID, &s.Token, &s.UserID, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	s.CreatedAt, _ = parseTime(createdAt)
+	// Sessions valid for 30 days
+	if time.Since(s.CreatedAt) > 30*24*time.Hour {
+		DB.Exec("DELETE FROM user_sessions WHERE id = ?", s.ID)
+		return nil, sql.ErrNoRows
+	}
+	return s, nil
+}
+
+func DeleteUserSession(token string) error {
+	_, err := DB.Exec("DELETE FROM user_sessions WHERE token = ?", token)
+	return err
+}
+
+// ── Admin Sessions (legacy) ──
 
 func CreateSession(userID int64) (*Session, error) {
 	token := generateToken(32)
@@ -185,7 +369,14 @@ func DeleteSession(token string) error {
 	return err
 }
 
-// Posts
+// ── Posts ──
+
+type PostFilter struct {
+	Sort     string
+	Type     string
+	DateFrom string
+	DateTo   string
+}
 
 func CreatePost(title, description, mediaType, filename, thumbnail string, locked bool) (*Post, error) {
 	lockedInt := 0
@@ -205,10 +396,36 @@ func CreatePost(title, description, mediaType, filename, thumbnail string, locke
 	return GetPost(id)
 }
 
-func GetPosts() ([]Post, error) {
-	rows, err := DB.Query(
-		"SELECT id, title, description, media_type, filename, thumbnail, locked, created_at FROM posts ORDER BY created_at DESC",
-	)
+func GetPosts(filter *PostFilter) ([]Post, error) {
+	query := "SELECT id, title, description, media_type, filename, thumbnail, locked, processing, created_at FROM posts"
+	var conditions []string
+	var args []interface{}
+
+	if filter != nil {
+		if filter.Type == "photo" || filter.Type == "video" {
+			conditions = append(conditions, "media_type = ?")
+			args = append(args, filter.Type)
+		}
+		if filter.DateFrom != "" {
+			conditions = append(conditions, "created_at >= ?")
+			args = append(args, filter.DateFrom)
+		}
+		if filter.DateTo != "" {
+			conditions = append(conditions, "created_at <= ?")
+			args = append(args, filter.DateTo+" 23:59:59")
+		}
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	orderBy := "ORDER BY created_at DESC"
+	if filter != nil && filter.Sort == "oldest" {
+		orderBy = "ORDER BY created_at ASC"
+	}
+
+	rows, err := DB.Query(query + " " + orderBy)
 	if err != nil {
 		return nil, err
 	}
@@ -218,12 +435,14 @@ func GetPosts() ([]Post, error) {
 	for rows.Next() {
 		var p Post
 		var lockedInt int
+		var processingInt int
 		var createdAt string
-		err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename, &p.Thumbnail, &lockedInt, &createdAt)
+		err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename, &p.Thumbnail, &lockedInt, &processingInt, &createdAt)
 		if err != nil {
 			return nil, err
 		}
 		p.Locked = lockedInt == 1
+		p.Processing = processingInt == 1
 		p.CreatedAt, _ = parseTime(createdAt)
 		posts = append(posts, p)
 	}
@@ -233,15 +452,17 @@ func GetPosts() ([]Post, error) {
 func GetPost(id int64) (*Post, error) {
 	p := &Post{}
 	var lockedInt int
+	var processingInt int
 	var createdAt string
 	err := DB.QueryRow(
-		"SELECT id, title, description, media_type, filename, thumbnail, locked, created_at FROM posts WHERE id = ?",
+		"SELECT id, title, description, media_type, filename, thumbnail, locked, processing, created_at FROM posts WHERE id = ?",
 		id,
-	).Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename, &p.Thumbnail, &lockedInt, &createdAt)
+	).Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename, &p.Thumbnail, &lockedInt, &processingInt, &createdAt)
 	if err != nil {
 		return nil, err
 	}
 	p.Locked = lockedInt == 1
+	p.Processing = processingInt == 1
 	p.CreatedAt, _ = parseTime(createdAt)
 	return p, nil
 }
@@ -258,12 +479,23 @@ func UpdatePostLock(id int64, locked bool) (*Post, error) {
 	return GetPost(id)
 }
 
+func UpdatePostProcessing(id int64, filename, thumbnail string) error {
+	if DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	_, err := DB.Exec(
+		"UPDATE posts SET filename = ?, thumbnail = ?, processing = 0 WHERE id = ?",
+		filename, thumbnail, id,
+	)
+	return err
+}
+
 func DeletePost(id int64) error {
 	_, err := DB.Exec("DELETE FROM posts WHERE id = ?", id)
 	return err
 }
 
-// Analytics Settings
+// ── Analytics Settings ──
 
 func GetAnalyticsSettings() (*AnalyticsSettings, error) {
 	s := &AnalyticsSettings{}
@@ -292,7 +524,7 @@ func UpdateAnalyticsSettings(scriptURL, websiteID string, enabled bool) error {
 	return err
 }
 
-// Helpers
+// ── Helpers ──
 
 func generateToken(n int) string {
 	b := make([]byte, n)
@@ -301,8 +533,6 @@ func generateToken(n int) string {
 }
 
 // parseTime tries multiple formats to parse timestamps from SQLite.
-// modernc.org/sqlite returns RFC3339 format, while C-library SQLite
-// returns "2006-01-02 15:04:05". This handles both.
 func parseTime(s string) (time.Time, error) {
 	s = strings.TrimSpace(s)
 	formats := []string{
@@ -320,14 +550,13 @@ func parseTime(s string) (time.Time, error) {
 }
 
 func hashPassword(password string) (string, error) {
-	// bcrypt-like approach: use SHA-256 + salt for simplicity (no CGO)
 	salt := generateToken(16)
 	hash := sha256Hash(salt + password)
 	return salt + ":" + hash, nil
 }
 
 func CheckPassword(password, stored string) bool {
-	if len(stored) < 49 { // salt(32) + ":" + hash(64) = 97 chars min
+	if len(stored) < 49 {
 		return false
 	}
 	salt := stored[:32]

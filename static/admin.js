@@ -5,15 +5,13 @@ const API = {
   logout: '/api/admin/logout',
   posts: '/api/admin/posts',
   upload: '/api/admin/upload',
+  users: '/api/admin/users',
   settings: '/api/admin/settings/analytics',
   setupStatus: '/api/setup/status',
 };
 
-let currentUser = null;
-
 // Check existing auth on load
 async function checkAuth() {
-  // First check if setup is needed
   try {
     const setupRes = await fetch(API.setupStatus);
     if (setupRes.ok) {
@@ -38,7 +36,7 @@ async function checkAuth() {
 // Login
 async function handleLogin(e) {
   e.preventDefault();
-  const username = document.getElementById('username').value;
+  const email = document.getElementById('username').value;
   const password = document.getElementById('password').value;
   const error = document.getElementById('login-error');
 
@@ -46,7 +44,7 @@ async function handleLogin(e) {
     const res = await fetch(API.login, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ email, password }),
     });
 
     if (!res.ok) {
@@ -67,21 +65,20 @@ async function handleLogout() {
   showLogin();
 }
 
-// Show login form
 function showLogin() {
   document.getElementById('login-section').style.display = 'flex';
   document.getElementById('dashboard-section').style.display = 'none';
 }
 
-// Show dashboard
 function showDashboard() {
   document.getElementById('login-section').style.display = 'none';
   document.getElementById('dashboard-section').style.display = 'block';
   loadPosts();
+  loadUsers();
   loadSettings();
 }
 
-// Upload with progress bar
+// Upload
 function handleUpload(e) {
   e.preventDefault();
   const form = e.target;
@@ -115,7 +112,7 @@ function handleUpload(e) {
     if (xhr.status >= 200 && xhr.status < 300) {
       progressFill.style.width = '100%';
       progressText.textContent = '✅ Done!';
-      status.textContent = 'Uploaded successfully!';
+      status.textContent = 'Upload accepted! Processing in background.';
       status.style.color = '#4CAF50';
       form.reset();
       setTimeout(() => { progress.style.display = 'none'; }, 1500);
@@ -158,26 +155,29 @@ async function loadPosts() {
       return;
     }
 
-    tbody.innerHTML = posts.map(post => `
+    tbody.innerHTML = posts.map(post => {
+      const thumbnail = post.thumbnail || post.filename;
+      return `
       <tr>
         <td>
           ${post.media_type === 'video'
-            ? `<video src="/uploads/${post.filename}" style="width:80px;height:50px;object-fit:cover;border-radius:4px;" preload="metadata"></video>`
-            : `<img src="/uploads/${post.filename}" style="width:80px;height:50px;object-fit:cover;border-radius:4px;" loading="lazy">`
+            ? `<video src="/uploads/${thumbnail}" style="width:80px;height:50px;object-fit:cover;border-radius:4px;" preload="metadata"></video>`
+            : `<img src="/uploads/${thumbnail}" style="width:80px;height:50px;object-fit:cover;border-radius:4px;" loading="lazy">`
           }
+          ${post.processing ? '<span style="font-size:0.7rem;color:var(--gold);display:block;">⏳ processing</span>' : ''}
         </td>
         <td>${escapeHtml(post.title)}</td>
         <td><span class="type-badge type-${post.media_type}">${post.media_type}</span></td>
         <td>
           <span class="lock-status">${post.locked ? '🔒' : '🔓'}</span>
-          <button class="lock-btn" onclick="toggleLock(${post.id}, ${post.locked})" title="${post.locked ? 'Unlock' : 'Lock'}">
+          <button class="lock-btn" onclick="toggleLock(${post.id}, ${post.locked})">
             ${post.locked ? 'Unlock' : 'Lock'}
           </button>
         </td>
         <td>${new Date(post.created_at).toLocaleDateString()}</td>
         <td><button class="delete-btn" onclick="deletePost(${post.id})">Delete</button></td>
       </tr>
-    `).join('');
+    `}).join('');
   } catch (err) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#D42B2B;">Failed to load posts</td></tr>';
   }
@@ -209,6 +209,76 @@ async function deletePost(id) {
     loadPosts();
   } catch (err) {
     alert('Failed to delete post');
+  }
+}
+
+// ── Users Management ──
+
+async function loadUsers() {
+  const tbody = document.getElementById('users-table-body');
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#888;">Loading...</td></tr>';
+
+  try {
+    const res = await fetch(API.users);
+    if (!res.ok) throw new Error('Failed');
+    const users = await res.json();
+
+    if (users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#888;">No users</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = users.map(user => `
+      <tr>
+        <td>${escapeHtml(user.email)}</td>
+        <td><span class="type-badge ${user.role === 'admin' ? 'type-photo' : 'type-video'}">${user.role}</span></td>
+        <td>
+          <span class="lock-status">${user.paid ? '✅ Paid' : '❌ Not Paid'}</span>
+          <button class="lock-btn" onclick="togglePaid(${user.id}, ${user.paid})">
+            ${user.paid ? 'Revoke' : 'Grant'}
+          </button>
+        </td>
+        <td>${new Date(user.created_at).toLocaleDateString()}</td>
+        <td>
+          ${user.role !== 'admin'
+            ? `<button class="delete-btn" onclick="deleteUser(${user.id})">Delete</button>`
+            : '<span style="color:#888;font-size:0.75rem;">Admin</span>'
+          }
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#D42B2B;">Failed to load users</td></tr>';
+  }
+}
+
+async function togglePaid(id, currentlyPaid) {
+  try {
+    const res = await fetch(`${API.users}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paid: !currentlyPaid }),
+    });
+    if (!res.ok) throw new Error('Failed');
+    loadUsers();
+  } catch (err) {
+    alert('Failed to update user');
+  }
+}
+
+async function deleteUser(id) {
+  if (!confirm('Delete this user? This cannot be undone.')) return;
+
+  try {
+    const res = await fetch(`${API.users}/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || 'Failed to delete user');
+      return;
+    }
+    loadUsers();
+  } catch (err) {
+    alert('Failed to delete user');
   }
 }
 
@@ -256,7 +326,7 @@ async function handleSaveSettings(e) {
   }
 }
 
-// Umami tracking init (shared with public page)
+// Umami tracking init
 async function initUmamiTracking() {
   try {
     const res = await fetch('/api/settings/analytics');
@@ -264,7 +334,6 @@ async function initUmamiTracking() {
     const settings = await res.json();
     if (!settings.tracking_enabled || !settings.umami_script_url || !settings.umami_website_id) return;
 
-    // Auto-append /script.js if URL doesn't end with a .js file
     let src = settings.umami_script_url;
     if (src && !src.match(/\.js$/)) {
       src = src.replace(/\/+$/, '') + '/script.js';

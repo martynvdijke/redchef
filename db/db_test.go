@@ -132,7 +132,7 @@ func TestGetPosts(t *testing.T) {
 		t.Fatalf("CreatePost failed: %v", err)
 	}
 
-	posts, err := GetPosts()
+	posts, err := GetPosts(nil)
 	if err != nil {
 		t.Fatalf("GetPosts failed: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestHasUsers(t *testing.T) {
 		t.Error("expected no users initially")
 	}
 
-	err = CreateUser("admin", "password123")
+	_, err = CreateUser("admin", "password123")
 	if err != nil {
 		t.Fatalf("CreateUser failed: %v", err)
 	}
@@ -205,21 +205,21 @@ func TestUserPassword(t *testing.T) {
 	setupTestDB(t)
 	defer cleanupTestDB(t)
 
-	err := CreateUser("chef", "s3cret!")
+	_, err := CreateUser("chef", "s3cret!")
 	if err != nil {
 		t.Fatalf("CreateUser failed: %v", err)
 	}
 
-	_, hash, err := GetUserByUsername("chef")
+	user, err := GetUserByUsername("chef")
 	if err != nil {
 		t.Fatalf("GetUserByUsername failed: %v", err)
 	}
 
-	if !CheckPassword("s3cret!", hash) {
+	if !CheckPassword("s3cret!", user.PasswordHash) {
 		t.Error("CheckPassword returned false for correct password")
 	}
 
-	if CheckPassword("wrong", hash) {
+	if CheckPassword("wrong", user.PasswordHash) {
 		t.Error("CheckPassword returned true for wrong password")
 	}
 }
