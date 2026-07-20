@@ -61,7 +61,7 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 	title := r.FormValue("title")
 	description := r.FormValue("description")
 	lockedStr := r.FormValue("locked")
-	locked := lockedStr != "false"
+	locked := lockedStr == "true" || lockedStr == "on"
 
 	if title == "" {
 		http.Error(w, `{"error":"title is required"}`, http.StatusBadRequest)

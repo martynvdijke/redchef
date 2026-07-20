@@ -22,19 +22,10 @@ func main() {
 	// Configuration from environment
 	port := getEnv("PORT", "8080")
 	dbPath := getEnv("DB_PATH", "/db/redchef.db")
-	adminUser := getEnv("ADMIN_USERNAME", "admin")
-	adminPass := getEnv("ADMIN_PASSWORD", "admin")
 
 	// Initialize database
 	if err := db.Init(dbPath); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
-	}
-
-	// Seed admin user from env vars (if ADMIN_USERNAME or ADMIN_PASSWORD explicitly set)
-	if os.Getenv("ADMIN_USERNAME") != "" || os.Getenv("ADMIN_PASSWORD") != "" {
-		if err := db.SeedAdmin(adminUser, adminPass); err != nil {
-			log.Fatalf("Failed to seed admin user: %v", err)
-		}
 	}
 
 	// Set up routes

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -223,7 +224,7 @@ func GetPosts() ([]Post, error) {
 			return nil, err
 		}
 		p.Locked = lockedInt == 1
-		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		p.CreatedAt, _ = parseTime(createdAt)
 		posts = append(posts, p)
 	}
 	return posts, nil
@@ -241,7 +242,7 @@ func GetPost(id int64) (*Post, error) {
 		return nil, err
 	}
 	p.Locked = lockedInt == 1
-	p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	p.CreatedAt, _ = parseTime(createdAt)
 	return p, nil
 }
 
@@ -263,7 +264,7 @@ func GetAnalyticsSettings() (*AnalyticsSettings, error) {
 		return nil, err
 	}
 	s.TrackingEnabled = enabledInt == 1
-	s.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	s.UpdatedAt, _ = parseTime(updatedAt)
 	return s, nil
 }
 
@@ -285,6 +286,25 @@ func generateToken(n int) string {
 	b := make([]byte, n)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// parseTime tries multiple formats to parse timestamps from SQLite.
+// modernc.org/sqlite returns RFC3339 format, while C-library SQLite
+// returns "2006-01-02 15:04:05". This handles both.
+func parseTime(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05Z",
+		"2006-01-02T15:04:05",
+	}
+	for _, f := range formats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("cannot parse time: %q", s)
 }
 
 func hashPassword(password string) (string, error) {
