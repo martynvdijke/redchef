@@ -440,6 +440,8 @@ async function loadEmailSettings() {
     document.getElementById('smtp-password').value = s.password || '';
     document.getElementById('smtp-from').value = s.from_addr || '';
     document.getElementById('smtp-encryption').value = s.encryption || 'tls';
+    document.getElementById('gotify-url').value = s.gotify_url || '';
+    document.getElementById('gotify-token').value = s.gotify_token || '';
   } catch (_) {}
 }
 
@@ -460,6 +462,8 @@ async function handleSaveEmailSettings(e) {
         password: document.getElementById('smtp-password').value,
         from_addr: document.getElementById('smtp-from').value,
         encryption: document.getElementById('smtp-encryption').value,
+        gotify_url: document.getElementById('gotify-url').value,
+        gotify_token: document.getElementById('gotify-token').value,
       }),
     });
 
@@ -497,6 +501,30 @@ async function initUmamiTracking() {
     script.setAttribute('data-website-id', settings.umami_website_id);
     document.head.appendChild(script);
   } catch (_) {}
+}
+
+// ── Test Email ──
+
+async function handleTestEmail() {
+  const status = document.getElementById('email-settings-status');
+  status.textContent = 'Sending test email...';
+  status.style.color = '#F5C518';
+
+  try {
+    const res = await fetch('/api/admin/email/test', { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json();
+      status.textContent = data.error || 'Test email failed';
+      status.style.color = '#D42B2B';
+      return;
+    }
+    const data = await res.json();
+    status.textContent = '✅ Test email sent to ' + data.email + ' (and Gotify if configured)';
+    status.style.color = '#4CAF50';
+  } catch (err) {
+    status.textContent = 'Network error';
+    status.style.color = '#D42B2B';
+  }
 }
 
 // ── Linked Posts Management ──
@@ -595,6 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('upload-form').addEventListener('submit', handleUpload);
   document.getElementById('settings-form').addEventListener('submit', handleSaveSettings);
   document.getElementById('email-settings-form').addEventListener('submit', handleSaveEmailSettings);
+  document.getElementById('btn-test-email').addEventListener('click', handleTestEmail);
   document.getElementById('edit-form').addEventListener('submit', handleEditSubmit);
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
   initUmamiTracking();

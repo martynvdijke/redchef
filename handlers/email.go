@@ -1,14 +1,47 @@
 package handlers
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/smtp"
 	"strings"
 
 	"redchef/db"
 )
+
+// ── Gotify ──
+
+// SendGotifyNotification sends a push notification via Gotify.
+// Silently skips when Gotify is not configured.
+func SendGotifyNotification(title, message string) {
+	s, err := db.GetEmailSettings()
+	if err != nil {
+		log.Printf("[gotify] settings error: %v", err)
+		return
+	}
+	if strings.TrimSpace(s.GotifyURL) == "" || strings.TrimSpace(s.GotifyToken) == "" {
+		return
+	}
+
+	url := strings.TrimRight(s.GotifyURL, "/") + "/message?token=" + s.GotifyToken
+	payload, _ := json.Marshal(map[string]interface{}{
+		"title":    title,
+		"message":  message,
+		"priority": 5,
+	})
+
+	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		log.Printf("[gotify] send failed: %v", err)
+		return
+	}
+	resp.Body.Close()
+	log.Printf("[gotify] Sent %q", title)
+}
 
 // SendEmail delivers an email using the admin-configured SMTP settings.
 // Returns nil without sending when SMTP is not configured (empty host).
@@ -117,6 +150,7 @@ Tot in de keuken!
 	if err := SendEmail(email, subject, body); err != nil {
 		log.Printf("[email] Failed to send welcome email to %s: %v", email, err)
 	}
+	SendGotifyNotification("Nieuwe gebruiker", fmt.Sprintf("%s heeft een account aangemaakt", email))
 }
 
 // SendSubscriptionInvoice emails a mock invoice for the €4,99/maand subscription.
@@ -141,6 +175,7 @@ Je hebt nu onbeperkt toegang tot alle content. Smakelijk!
 	if err := SendEmail(email, subject, body); err != nil {
 		log.Printf("[email] Failed to send subscription invoice to %s: %v", email, err)
 	}
+	SendGotifyNotification("Nieuw abonnement", fmt.Sprintf("%s heeft een Royal Member abonnement genomen (€4,99/maand)", email))
 }
 
 // SendItemInvoice emails a mock invoice for a single purchased item.
@@ -165,6 +200,30 @@ Deze content is nu voor jou ontgrendeld. Veel kijkplezier!
 	if err := SendEmail(email, subject, body); err != nil {
 		log.Printf("[email] Failed to send item invoice to %s: %v", email, err)
 	}
+	SendGotifyNotification("Item gekocht", fmt.Sprintf("%s heeft %s gekocht (€%s)", email, postTitle, price))
+}
+
+// SendTipNotification emails the tipper a confirmation and notifies admin via Gotify.
+func SendTipNotification(email, postTitle string, amountCents int) {
+	amount := formatEuros(amountCents)
+	subject := fmt.Sprintf("💸 Bedankt voor je tip! — €%s", amount)
+	body := fmt.Sprintf(`Hoi!
+
+Bedankt voor je fooi op "%s"!
+
+┌──────────────────────────────
+│ Tip: €%s
+│ Post: %s
+└──────────────────────────────
+
+De Chef waardeert het enorm! 🍳
+
+— Red Copper Chef 🍳`, postTitle, amount, postTitle)
+
+	if err := SendEmail(email, subject, body); err != nil {
+		log.Printf("[email] Failed to send tip notification to %s: %v", email, err)
+	}
+	SendGotifyNotification("Nieuwe fooi", fmt.Sprintf("%s heeft €%s fooi gegeven op \"%s\"", email, amount, postTitle))
 }
 
 // SendNewPostNotification emails all registered users about a new post.
@@ -206,4 +265,5 @@ Bekijk de post hier:
 			}
 		}(u.Email)
 	}
+	SendGotifyNotification("Nieuwe post", fmt.Sprintf("\"%s\" is gepubliceerd", post.Title))
 }

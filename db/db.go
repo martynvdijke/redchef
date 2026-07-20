@@ -43,14 +43,16 @@ type AnalyticsSettings struct {
 }
 
 type EmailSettings struct {
-	ID        int64     `json:"id"`
-	SMTPHost  string    `json:"smtp_host"`
-	SMTPPort  int       `json:"smtp_port"`
-	Username  string    `json:"username"`
-	Password  string    `json:"password"`
-	FromAddr  string    `json:"from_addr"`
-	Encryption string   `json:"encryption"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          int64     `json:"id"`
+	SMTPHost    string    `json:"smtp_host"`
+	SMTPPort    int       `json:"smtp_port"`
+	Username    string    `json:"username"`
+	Password    string    `json:"password"`
+	FromAddr    string    `json:"from_addr"`
+	Encryption  string    `json:"encryption"`
+	GotifyURL   string    `json:"gotify_url"`
+	GotifyToken string    `json:"gotify_token"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type Comment struct {
@@ -71,10 +73,11 @@ type Favourite struct {
 }
 
 type Tip struct {
-	ID        int64     `json:"id"`
-	UserID    int64     `json:"user_id"`
-	PostID    int64     `json:"post_id"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	PostID      int64     `json:"post_id"`
+	AmountCents int       `json:"amount_cents"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type PostLink struct {
@@ -224,6 +227,8 @@ func migrate() error {
 			password TEXT NOT NULL DEFAULT '',
 			from_addr TEXT NOT NULL DEFAULT '',
 			encryption TEXT NOT NULL DEFAULT 'tls',
+			gotify_url TEXT NOT NULL DEFAULT '',
+			gotify_token TEXT NOT NULL DEFAULT '',
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 	`)
@@ -233,12 +238,15 @@ func migrate() error {
 	migrateAddColumn("users", "role", "TEXT DEFAULT 'normal'")
 	migrateAddColumn("users", "paid", "INTEGER DEFAULT 0")
 	migrateAddColumn("users", "created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP")
+	migrateAddColumn("tips", "amount_cents", "INTEGER NOT NULL DEFAULT 0")
+	migrateAddColumn("email_settings", "gotify_url", "TEXT NOT NULL DEFAULT ''")
+	migrateAddColumn("email_settings", "gotify_token", "TEXT NOT NULL DEFAULT ''")
 
 	// Seed default email settings row if table is empty
 	var emailCount int
 	DB.QueryRow("SELECT COUNT(*) FROM email_settings").Scan(&emailCount)
 	if emailCount == 0 {
-		DB.Exec("INSERT INTO email_settings (smtp_host, smtp_port, username, password, from_addr, encryption) VALUES ('', 587, '', '', '', 'tls')")
+		DB.Exec("INSERT INTO email_settings (smtp_host, smtp_port, username, password, from_addr, encryption, gotify_url, gotify_token) VALUES ('', 587, '', '', '', 'tls', '', '')")
 	}
 
 	// Seed default analytics settings row if table is empty
@@ -662,8 +670,8 @@ func GetEmailSettings() (*EmailSettings, error) {
 	s := &EmailSettings{}
 	var updatedAt string
 	err := DB.QueryRow(
-		"SELECT id, smtp_host, smtp_port, username, password, from_addr, encryption, updated_at FROM email_settings WHERE id = 1",
-	).Scan(&s.ID, &s.SMTPHost, &s.SMTPPort, &s.Username, &s.Password, &s.FromAddr, &s.Encryption, &updatedAt)
+		"SELECT id, smtp_host, smtp_port, username, password, from_addr, encryption, gotify_url, gotify_token, updated_at FROM email_settings WHERE id = 1",
+	).Scan(&s.ID, &s.SMTPHost, &s.SMTPPort, &s.Username, &s.Password, &s.FromAddr, &s.Encryption, &s.GotifyURL, &s.GotifyToken, &updatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -671,10 +679,10 @@ func GetEmailSettings() (*EmailSettings, error) {
 	return s, nil
 }
 
-func UpdateEmailSettings(host string, port int, username, password, fromAddr, encryption string) error {
+func UpdateEmailSettings(host string, port int, username, password, fromAddr, encryption, gotifyURL, gotifyToken string) error {
 	_, err := DB.Exec(
-		"UPDATE email_settings SET smtp_host = ?, smtp_port = ?, username = ?, password = ?, from_addr = ?, encryption = ?, updated_at = datetime('now') WHERE id = 1",
-		host, port, username, password, fromAddr, encryption,
+		"UPDATE email_settings SET smtp_host = ?, smtp_port = ?, username = ?, password = ?, from_addr = ?, encryption = ?, gotify_url = ?, gotify_token = ?, updated_at = datetime('now') WHERE id = 1",
+		host, port, username, password, fromAddr, encryption, gotifyURL, gotifyToken,
 	)
 	return err
 }
@@ -848,9 +856,15 @@ func HasUserTipped(userID, postID int64) (bool, error) {
 	return count > 0, err
 }
 
-func CreateTip(userID, postID int64) error {
-	_, err := DB.Exec("INSERT INTO tips (user_id, post_id) VALUES (?, ?)", userID, postID)
+func CreateTip(userID, postID int64, amountCents int) error {
+	_, err := DB.Exec("INSERT INTO tips (user_id, post_id, amount_cents) VALUES (?, ?, ?)", userID, postID, amountCents)
 	return err
+}
+
+func GetTotalTipAmount(postID int64) (int, error) {
+	var total int
+	err := DB.QueryRow("SELECT COALESCE(SUM(amount_cents), 0) FROM tips WHERE post_id = ?", postID).Scan(&total)
+	return total, err
 }
 
 // ── Purchases (per-item mock payments) ──

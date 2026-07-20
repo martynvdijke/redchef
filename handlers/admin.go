@@ -26,12 +26,14 @@ type AnalyticsSettingsRequest struct {
 }
 
 type EmailSettingsRequest struct {
-	SMTPHost   string `json:"smtp_host"`
-	SMTPPort   int    `json:"smtp_port"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	FromAddr   string `json:"from_addr"`
-	Encryption string `json:"encryption"`
+	SMTPHost    string `json:"smtp_host"`
+	SMTPPort    int    `json:"smtp_port"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	FromAddr    string `json:"from_addr"`
+	Encryption  string `json:"encryption"`
+	GotifyURL   string `json:"gotify_url"`
+	GotifyToken string `json:"gotify_token"`
 }
 
 var uploadDir string
@@ -368,7 +370,7 @@ func AdminUpdateEmailSettings(w http.ResponseWriter, r *http.Request) {
 		req.Encryption = "tls"
 	}
 
-	if err := db.UpdateEmailSettings(req.SMTPHost, req.SMTPPort, req.Username, req.Password, req.FromAddr, req.Encryption); err != nil {
+	if err := db.UpdateEmailSettings(req.SMTPHost, req.SMTPPort, req.Username, req.Password, req.FromAddr, req.Encryption, req.GotifyURL, req.GotifyToken); err != nil {
 		jsonError(w, "failed to save email settings", http.StatusInternalServerError)
 		return
 	}
@@ -376,6 +378,50 @@ func AdminUpdateEmailSettings(w http.ResponseWriter, r *http.Request) {
 	settings, _ := db.GetEmailSettings()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(settings)
+}
+
+func AdminTestEmail(w http.ResponseWriter, r *http.Request) {
+	s, err := db.GetEmailSettings()
+	if err != nil {
+		jsonError(w, "failed to get email settings", http.StatusInternalServerError)
+		return
+	}
+
+	to := r.FormValue("to")
+	if to == "" {
+		// Get admin email
+		userID := getUserID(r)
+		user, err := db.GetUserByID(userID)
+		if err == nil {
+			to = user.Email
+		}
+	}
+	if to == "" {
+		jsonError(w, "no recipient email available", http.StatusBadRequest)
+		return
+	}
+
+	err = SendEmail(to, "Test e-mail — Red Copper Chef 🍳",
+		`Dit is een test-e-mail van Red Copper Chef.
+
+Als je dit leest, werkt de SMTP-configuratie correct!
+
+— Red Copper Chef 🍳`)
+	if err != nil {
+		jsonError(w, fmt.Sprintf("email test failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Also test Gotify if configured
+	if s.GotifyURL != "" && s.GotifyToken != "" {
+		SendGotifyNotification("Test notificatie", "Gotify werkt correct! ✅")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":    true,
+		"email": to,
+	})
 }
 
 // ── Setup ──

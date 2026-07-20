@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -22,34 +24,48 @@ func CreateTip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var req struct {
+		AmountCents int `json:"amount_cents"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.AmountCents < 1 {
+		jsonError(w, "amount_cents must be at least 1", http.StatusBadRequest)
+		return
+	}
+
 	// Verify post exists
-	if _, err := db.GetPost(postID); err != nil {
+	post, err := db.GetPost(postID)
+	if err != nil {
 		jsonError(w, "post not found", http.StatusNotFound)
 		return
 	}
 
-	// Prevent double-tipping
-	tipped, err := db.HasUserTipped(userID, postID)
-	if err != nil {
-		jsonError(w, "failed to check tip status", http.StatusInternalServerError)
-		return
-	}
-	if tipped {
-		jsonError(w, "already tipped this post", http.StatusConflict)
-		return
-	}
-
-	if err := db.CreateTip(userID, postID); err != nil {
+	if err := db.CreateTip(userID, postID, req.AmountCents); err != nil {
 		jsonError(w, "failed to create tip", http.StatusInternalServerError)
 		return
 	}
 
+	// Send confirmation email + Gotify notification
+	user, err := db.GetUserByID(userID)
+	if err == nil {
+		go SendTipNotification(user.Email, post.Title, req.AmountCents)
+	} else {
+		log.Printf("[tips] Failed to get user %d for notification: %v", userID, err)
+	}
+
 	count, _ := db.GetTipCount(postID)
+	totalAmount, _ := db.GetTotalTipAmount(postID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":        true,
-		"tip_count": count,
+		"ok":             true,
+		"tip_count":      count,
+		"amount_cents":   req.AmountCents,
+		"total_amount":   totalAmount,
+		"formatted":      fmt.Sprintf("€%d,%02d", req.AmountCents/100, req.AmountCents%100),
 	})
 }

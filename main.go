@@ -87,6 +87,9 @@ func main() {
 	mux.Handle("PATCH /api/admin/", handlers.AdminAuth(adminMux))
 	mux.Handle("PUT /api/admin/", handlers.AdminAuth(adminMux))
 
+	// Admin test email (POST with auth)
+	mux.Handle("POST /api/admin/email/test", handlers.AdminAuth(http.HandlerFunc(handlers.AdminTestEmail)))
+
 	// Old admin login/logout (redirect to new auth)
 	mux.HandleFunc("POST /api/admin/login", handlers.Login)
 	mux.HandleFunc("POST /api/admin/logout", handlers.Logout)

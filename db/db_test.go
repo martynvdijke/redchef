@@ -328,7 +328,7 @@ func TestEmailSettings(t *testing.T) {
 	}
 
 	// Update settings
-	err = UpdateEmailSettings("smtp.example.com", 465, "user@example.com", "secret", "noreply@example.com", "ssl")
+	err = UpdateEmailSettings("smtp.example.com", 465, "user@example.com", "secret", "noreply@example.com", "ssl", "https://gotify.example.com", "test-token")
 	if err != nil {
 		t.Fatalf("UpdateEmailSettings failed: %v", err)
 	}
@@ -355,6 +355,12 @@ func TestEmailSettings(t *testing.T) {
 	}
 	if settings.Encryption != "ssl" {
 		t.Errorf("expected encryption 'ssl', got %q", settings.Encryption)
+	}
+	if settings.GotifyURL != "https://gotify.example.com" {
+		t.Errorf("expected gotify_url 'https://gotify.example.com', got %q", settings.GotifyURL)
+	}
+	if settings.GotifyToken != "test-token" {
+		t.Errorf("expected gotify_token 'test-token', got %q", settings.GotifyToken)
 	}
 }
 

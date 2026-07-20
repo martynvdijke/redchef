@@ -424,7 +424,23 @@
             </select>
           </div>
         </div>
-        <button type="submit" class="btn-primary" style="margin-top:1rem;background:var(--copper);">Save Email Settings</button>
+        <div class="form-row" style="margin-top:1rem;border-top:1px solid #333;padding-top:1rem;">
+          <div class="full form-group">
+            <label style="color:var(--gold);">📲 Gotify Push Notifications</label>
+          </div>
+          <div class="form-group">
+            <label>Gotify URL</label>
+            <input type="url" name="gotify_url" id="gotify-url" placeholder="https://gotify.example.com">
+          </div>
+          <div class="form-group">
+            <label>App Token</label>
+            <input type="password" name="gotify_token" id="gotify-token" placeholder="Gotify application token" autocomplete="off">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:1rem;flex-wrap:wrap;">
+          <button type="submit" class="btn-primary" style="background:var(--copper);flex:1;">Save Email Settings</button>
+          <button type="button" class="btn-primary" id="btn-test-email" style="background:#555;flex:0 0 auto;padding:14px 24px;white-space:nowrap;">📧 Test Email</button>
+        </div>
         <div class="upload-status" id="email-settings-status"></div>
       </form>
     </div>

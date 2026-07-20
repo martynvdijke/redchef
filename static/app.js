@@ -422,7 +422,7 @@ function renderPostsView() {
             <span class="action-icon">${heartIcon}</span>
             <span class="action-count" data-fav-count="${post.id}">${post.favourite_count || 0}</span>
           </button>
-          <button class="action-btn" onclick="handleTip(${post.id}, this)" ${!currentUser ? 'disabled' : ''}>
+          <button class="action-btn" onclick="openTipModal(${post.id})" ${!currentUser ? 'disabled' : ''}>
             <span class="action-icon">💸</span>
             <span class="action-count" data-tip-count="${post.id}">${post.tip_count || 0}</span>
           </button>
@@ -504,20 +504,94 @@ async function handleFavourite(postId, btn) {
 
 // ── Tips ──
 
-async function handleTip(postId, btn) {
+function openTipModal(postId) {
   if (!currentUser) { openLoginModal(); return; }
+
+  // Remove existing tip modal if any
+  const existing = document.getElementById('tip-modal');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'auth-modal-overlay';
+  overlay.id = 'tip-modal';
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="auth-modal" style="max-width:380px;">
+      <button class="modal-close" onclick="this.closest('.auth-modal-overlay').remove()">✕</button>
+      <h2>💸 Geef een fooi</h2>
+      <p class="auth-subtitle">Waardeer de Chef met een kleine bijdrage</p>
+      <div class="tip-presets" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;justify-content:center;">
+        <button class="tip-preset-btn" data-amount="100" style="padding:10px 18px;border:2px solid #444;border-radius:8px;background:#222;color:var(--white);font-size:1rem;cursor:pointer;transition:all 0.2s;">€1,00</button>
+        <button class="tip-preset-btn" data-amount="250" style="padding:10px 18px;border:2px solid #444;border-radius:8px;background:#222;color:var(--white);font-size:1rem;cursor:pointer;transition:all 0.2s;">€2,50</button>
+        <button class="tip-preset-btn" data-amount="500" style="padding:10px 18px;border:2px solid #444;border-radius:8px;background:#222;color:var(--white);font-size:1rem;cursor:pointer;transition:all 0.2s;">€5,00</button>
+        <button class="tip-preset-btn" data-amount="1000" style="padding:10px 18px;border:2px solid #444;border-radius:8px;background:#222;color:var(--white);font-size:1rem;cursor:pointer;transition:all 0.2s;">€10,00</button>
+      </div>
+      <div class="form-group">
+        <label>Of voer bedrag in (in centen)</label>
+        <input type="number" id="tip-amount-input" min="1" step="1" value="100" placeholder="b.v. 100 = €1,00"
+               style="width:100%;padding:12px 14px;border-radius:8px;border:1px solid #444;background:#222;color:var(--white);font-size:1.2rem;font-family:inherit;text-align:center;">
+      </div>
+      <button class="btn-primary" id="tip-send-btn" data-post-id="${postId}" style="margin-top:0;">💸 Verstuur fooi</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Click outside to close
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  // Preset button selection
+  overlay.querySelectorAll('.tip-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      overlay.querySelectorAll('.tip-preset-btn').forEach(b => {
+        b.style.borderColor = '#444';
+        b.style.background = '#222';
+      });
+      btn.style.borderColor = 'var(--gold)';
+      btn.style.background = 'rgba(245,197,24,0.15)';
+      document.getElementById('tip-amount-input').value = btn.dataset.amount;
+    });
+  });
+
+  // Submit
+  document.getElementById('tip-send-btn').addEventListener('click', async () => {
+    const amountCents = parseInt(document.getElementById('tip-amount-input').value);
+    if (!amountCents || amountCents < 1) {
+      showToast('❌ Voer een geldig bedrag in (minimaal 1 cent)');
+      return;
+    }
+    await sendTip(postId, amountCents);
+    overlay.remove();
+  });
+}
+
+async function sendTip(postId, amountCents) {
   try {
-    const res = await fetch('/api/posts/' + postId + '/tip', { method: 'POST' });
+    const res = await fetch('/api/posts/' + postId + '/tip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount_cents: amountCents }),
+    });
     if (!res.ok) {
       const data = await res.json();
       showToast('❌ ' + (data.error || 'Failed'));
       return;
     }
     const data = await res.json();
-    const countSpan = btn.querySelector('.action-count');
-    countSpan.textContent = data.tip_count;
-    showToast('🎉 Thanks for the tip!');
-    btn.disabled = true;
+    // Update tip count in the feed by finding the button in the post card
+    const postCard = document.querySelector(`.post-card[data-post-id="${postId}"]`);
+    if (postCard) {
+      const actionBtns = postCard.querySelectorAll('.action-btn');
+      for (const btn of actionBtns) {
+        const icon = btn.querySelector('.action-icon');
+        if (icon && icon.textContent === '💸') {
+          const countSpan = btn.querySelector('.action-count');
+          if (countSpan) countSpan.textContent = data.tip_count;
+        }
+      }
+    }
+    showToast('🎉 Bedankt voor de fooi van ' + data.formatted + '!');
   } catch (_) {
     showToast('❌ Failed to send tip');
   }
