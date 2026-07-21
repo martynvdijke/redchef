@@ -1,3 +1,16 @@
+# [1.12.0](https://github.com/martynvdijke/redchef/compare/v1.11.1...v1.12.0) (2026-07-21)
+
+
+### Bug Fixes
+
+* build single package for E2E binary in CI (./... -> .) ([5e17c1f](https://github.com/martynvdijke/redchef/commit/5e17c1f7faba201a0a82c1668f1398ec9ea59a24))
+* don't nil DB in test cleanup to prevent panic in background goroutines ([66304f8](https://github.com/martynvdijke/redchef/commit/66304f8606cd3a28680069c52370b0f942f25323))
+
+
+### Features
+
+* testing improvements + multi-admin + Phase 1 opsx complete ([7556c71](https://github.com/martynvdijke/redchef/commit/7556c715f2db590f819393bb31f2a0a7627e3daa))
+
 ## [1.11.1](https://github.com/martynvdijke/redchef/compare/v1.11.0...v1.11.1) (2026-07-21)
 
 
