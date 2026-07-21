@@ -47,7 +47,8 @@ func setupHandlerTest(t *testing.T) (cleanup func()) {
 	return func() {
 		ProcessWG.Wait() // Wait for any in-flight media processing goroutines
 		db.DB.Close()
-		db.DB = nil
+		// Don't set db.DB = nil — background notification goroutines
+		// may still try to read email settings and nil DB would panic.
 		os.Remove("/tmp/redchef_handler_test.db")
 		os.Remove("/tmp/redchef_handler_test.db-wal")
 		os.Remove("/tmp/redchef_handler_test.db-shm")
