@@ -259,7 +259,8 @@ func AdminListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateUserRequest struct {
-	Paid *bool `json:"paid"`
+	Paid *bool  `json:"paid"`
+	Role *string `json:"role"`
 }
 
 func AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -276,13 +277,38 @@ func AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Paid == nil {
-		jsonError(w, "paid field is required", http.StatusBadRequest)
-		return
+	if req.Paid != nil {
+		if err := db.UpdateUserPaid(id, *req.Paid); err != nil {
+			jsonError(w, "failed to update user", http.StatusInternalServerError)
+			return
+		}
 	}
 
-	if err := db.UpdateUserPaid(id, *req.Paid); err != nil {
-		jsonError(w, "failed to update user", http.StatusInternalServerError)
+	if req.Role != nil {
+		role := *req.Role
+		if role != "admin" && role != "normal" {
+			jsonError(w, "role must be 'admin' or 'normal'", http.StatusBadRequest)
+			return
+		}
+
+		// Prevent demoting the only remaining admin
+		if role == "normal" {
+			var adminCount int
+			db.DB.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin' AND id != ?", id).Scan(&adminCount)
+			if adminCount == 0 {
+				jsonError(w, "cannot demote the last admin user", http.StatusBadRequest)
+				return
+			}
+		}
+
+		if err := db.UpdateUserRole(id, role); err != nil {
+			jsonError(w, "failed to update user role", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.Paid == nil && req.Role == nil {
+		jsonError(w, "at least one field (paid, role) is required", http.StatusBadRequest)
 		return
 	}
 

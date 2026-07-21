@@ -29,11 +29,49 @@ jobs:
         with:
           go-version: '1.26'
 
-      - name: Download dependencies
+      - name: Download Go dependencies
         run: go mod download
 
       - name: Build
         run: go build -o redchef .
 
-      - name: Run Tests
-        run: go test -v ./...
+      - name: Run Tests with Coverage
+        run: |
+          go test -v -coverprofile=coverage.out -covermode=count ./...
+
+      - name: Display Coverage
+        run: go tool cover -func=coverage.out
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium
+
+      - name: Build Go binary for E2E
+        run: go build -o /tmp/redchef-e2e ./...
+
+      - name: Run Playwright E2E Tests
+        run: npx playwright test
+        env:
+          CI: true
+
+      - name: Upload Playwright Report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

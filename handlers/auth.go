@@ -54,7 +54,11 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := db.CreateUser(req.Email, req.Password)
 	if err != nil {
-		jsonError(w, "failed to create user", http.StatusInternalServerError)
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			jsonError(w, "email already registered", http.StatusConflict)
+		} else {
+			jsonError(w, "failed to create user", http.StatusInternalServerError)
+		}
 		return
 	}
 

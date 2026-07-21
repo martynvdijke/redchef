@@ -344,9 +344,13 @@ async function loadUsers() {
         </td>
         <td>${new Date(user.created_at).toLocaleDateString()}</td>
         <td>
+          ${user.role === 'admin'
+            ? `<button class="lock-btn" onclick="toggleRole(${user.id}, 'normal')">Demote</button>`
+            : `<button class="lock-btn" onclick="toggleRole(${user.id}, 'admin')">Promote</button>`
+          }
           ${user.role !== 'admin'
             ? `<button class="delete-btn" onclick="deleteUser(${user.id})">Delete</button>`
-            : '<span style="color:#888;font-size:0.75rem;">Admin</span>'
+            : ''
           }
         </td>
       </tr>
@@ -367,6 +371,26 @@ async function togglePaid(id, currentlyPaid) {
     loadUsers();
   } catch (err) {
     alert('Failed to update user');
+  }
+}
+
+async function toggleRole(id, newRole) {
+  const action = newRole === 'admin' ? 'promote' : 'demote';
+  if (!confirm(`${action} this user to ${newRole}?`)) return;
+  try {
+    const res = await fetch(`${API.users}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: newRole }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || `Failed to ${action} user`);
+      return;
+    }
+    loadUsers();
+  } catch (err) {
+    alert(`Failed to ${action} user`);
   }
 }
 

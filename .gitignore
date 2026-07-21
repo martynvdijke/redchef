@@ -16,3 +16,6 @@ uploads/*
 
 # Node
 node_modules/
+
+# Test artifacts
+test-results/

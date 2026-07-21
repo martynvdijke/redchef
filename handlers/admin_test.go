@@ -80,6 +80,9 @@ func authenticatedRequest(t *testing.T, method, target string, body io.Reader) *
 		Name:  "session_token",
 		Value: session.Token,
 	})
+	// Set X-User-ID header (normally done by AuthMiddleware) so handlers can identify the user
+	req.Header.Set("X-User-ID", fmt.Sprintf("%d", user.ID))
+	req.Header.Set("X-User-Role", user.Role)
 	return req
 }
 

@@ -114,6 +114,10 @@ func Init(dbPath string) error {
 		return fmt.Errorf("open db: %w", err)
 	}
 
+	// SQLite is not designed for concurrent writes from multiple connections.
+	// Limit the pool to 1 to prevent WAL visibility races across connections.
+	DB.SetMaxOpenConns(1)
+
 	if err := migrate(); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
@@ -386,6 +390,18 @@ func UpdateUserEmail(id int64, email string) error {
 	return err
 }
 
+func UpdateUserRole(id int64, role string) error {
+	res, err := DB.Exec("UPDATE users SET role = ? WHERE id = ?", role, id)
+	if err != nil {
+		return err
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func UpdateUserPaid(id int64, paid bool) error {
 	paidInt := 0
 	if paid {
@@ -550,7 +566,7 @@ func GetPosts(filter *PostFilter) ([]Post, error) {
 		orderBy = "ORDER BY created_at ASC"
 	}
 
-	rows, err := DB.Query(query + " " + orderBy)
+	rows, err := DB.Query(query+" "+orderBy, args...)
 	if err != nil {
 		return nil, err
 	}
