@@ -61,7 +61,7 @@ jobs:
         run: npx playwright install chromium
 
       - name: Build Go binary for E2E
-        run: go build -o /tmp/redchef-e2e ./...
+        run: go build -o /tmp/redchef-e2e .
 
       - name: Run Playwright E2E Tests
         run: npx playwright test
