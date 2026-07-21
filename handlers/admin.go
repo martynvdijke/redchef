@@ -424,6 +424,57 @@ Als je dit leest, werkt de SMTP-configuratie correct!
 	})
 }
 
+// ── Admin Profile ──
+
+func AdminGetProfile(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	user, err := db.GetUserByID(userID)
+	if err != nil {
+		jsonError(w, "user not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":       user.ID,
+		"username": user.Username,
+		"email":    user.Email,
+		"role":     user.Role,
+	})
+}
+
+type UpdateProfileRequest struct {
+	Email string `json:"email"`
+}
+
+func AdminUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	var req UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	req.Email = strings.TrimSpace(req.Email)
+	if req.Email == "" || !strings.Contains(req.Email, "@") {
+		jsonError(w, "a valid email is required", http.StatusBadRequest)
+		return
+	}
+
+	userID := getUserID(r)
+	if err := db.UpdateUserEmail(userID, req.Email); err != nil {
+		jsonError(w, "failed to update email", http.StatusInternalServerError)
+		return
+	}
+
+	user, _ := db.GetUserByID(userID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":       true,
+		"id":       user.ID,
+		"username": user.Username,
+		"email":    user.Email,
+	})
+}
+
 // ── Setup ──
 
 func Setup(w http.ResponseWriter, r *http.Request) {

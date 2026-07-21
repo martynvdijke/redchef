@@ -297,6 +297,108 @@
       font-size: 0.85rem;
       color: var(--gray);
     }
+
+    /* ========== LIGHT MODE ========== */
+    body.light-mode {
+      background: #f5f5f0;
+    }
+    body.light-mode .login-box,
+    body.light-mode .upload-section {
+      background: #fff;
+      border-color: #ddd;
+    }
+    body.light-mode .form-group input,
+    body.light-mode .form-group textarea,
+    body.light-mode .form-group select {
+      background: #f9f9f7;
+      border-color: #ccc;
+      color: #1a1a2e;
+    }
+    body.light-mode .form-group select {
+      background: #f9f9f7;
+      color: #1a1a2e;
+    }
+    body.light-mode .form-group label {
+      color: #666;
+    }
+    body.light-mode .login-box .subtitle {
+      color: #999;
+    }
+    body.light-mode .admin-table td {
+      border-bottom-color: #e0e0e0;
+    }
+    body.light-mode .admin-table tr:hover td {
+      background: rgba(0,0,0,0.02);
+    }
+    body.light-mode .lock-status {
+      color: #333;
+    }
+    body.light-mode .upload-progress .progress-bar {
+      background: #ddd;
+    }
+    body.light-mode .settings-status,
+    body.light-mode .upload-status {
+      color: #555;
+    }
+    body.light-mode .dashboard-header {
+      border-bottom-color: var(--red);
+    }
+    body.light-mode .auth-modal-overlay {
+      background: rgba(0,0,0,0.3);
+    }
+    body.light-mode .auth-modal {
+      background: #fff;
+    }
+    body.light-mode .auth-modal .form-group input {
+      background: #f9f9f7;
+      border-color: #ccc;
+      color: #1a1a2e;
+    }
+    body.light-mode .nav-auth-btn-outline {
+      background: #f0f0ed;
+      border-color: #ccc;
+      color: #333;
+    }
+    body.light-mode .btn-test-email {
+      background: #ddd !important;
+      color: #333 !important;
+    }
+    body.light-mode .links-item {
+      border-bottom-color: #e0e0e0;
+    }
+    body.light-mode .links-item:hover {
+      background: rgba(0,0,0,0.02);
+    }
+    body.light-mode #toast-admin {
+      background: rgba(30,30,30,0.92) !important;
+      color: #fff !important;
+    }
+
+    /* Theme toggle button */
+    .theme-toggle {
+      background: none;
+      border: 2px solid #555;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      line-height: 1;
+      margin-right: 8px;
+    }
+    .theme-toggle:hover {
+      border-color: var(--gold);
+    }
+    body.light-mode .theme-toggle {
+      border-color: #bbb;
+    }
+    body.light-mode .theme-toggle:hover {
+      border-color: var(--red);
+    }
   </style>
 </head>
 <body>
@@ -326,7 +428,10 @@
   <div class="dashboard" id="dashboard-section">
     <div class="dashboard-header">
       <h1>👨‍🍳 Red Copper Chef — Content Studio</h1>
-      <button class="btn-danger" id="logout-btn">Logout</button>
+      <div style="display:flex;align-items:center;">
+        <button class="theme-toggle" id="theme-toggle" title="Toggle theme">🌙</button>
+        <button class="btn-danger" id="logout-btn">Logout</button>
+      </div>
     </div>
 
     <!-- Upload Form -->
@@ -390,6 +495,28 @@
       </form>
     </div>
 
+    <!-- Admin Profile -->
+    <div class="upload-section" id="profile-section">
+      <h2>👤 Admin Profile</h2>
+      <form id="profile-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="profile-username" disabled style="opacity:0.6;">
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="profile-email" placeholder="admin@example.com" required>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:1rem;flex-wrap:wrap;">
+          <button type="submit" class="btn-primary" style="background:var(--copper);flex:1;">Save Email</button>
+          <button type="button" class="btn-primary" id="btn-test-email" style="background:#555;flex:0 0 auto;padding:14px 24px;white-space:nowrap;">📧 Test Email</button>
+        </div>
+        <div class="upload-status" id="profile-status"></div>
+      </form>
+    </div>
+
     <!-- Email Settings -->
     <div class="upload-section" id="email-settings-section">
       <h2>📧 Email / SMTP Settings</h2>
@@ -439,7 +566,6 @@
         </div>
         <div style="display:flex;gap:10px;margin-top:1rem;flex-wrap:wrap;">
           <button type="submit" class="btn-primary" style="background:var(--copper);flex:1;">Save Email Settings</button>
-          <button type="button" class="btn-primary" id="btn-test-email" style="background:#555;flex:0 0 auto;padding:14px 24px;white-space:nowrap;">📧 Test Email</button>
         </div>
         <div class="upload-status" id="email-settings-status"></div>
       </form>

@@ -73,6 +73,8 @@ func main() {
 	adminMux.HandleFunc("PATCH /api/admin/users/{id}", handlers.AdminUpdateUser)
 	adminMux.HandleFunc("DELETE /api/admin/users/{id}", handlers.AdminDeleteUser)
 	adminMux.HandleFunc("GET /api/admin/posts/simple", handlers.AdminListAllPostsSimple)
+	adminMux.HandleFunc("GET /api/admin/settings/profile", handlers.AdminGetProfile)
+	adminMux.HandleFunc("PUT /api/admin/settings/profile", handlers.AdminUpdateProfile)
 	adminMux.HandleFunc("GET /api/admin/settings/analytics", handlers.AdminGetAnalyticsSettings)
 	adminMux.HandleFunc("PUT /api/admin/settings/analytics", handlers.AdminUpdateAnalyticsSettings)
 	adminMux.HandleFunc("GET /api/admin/settings/email", handlers.AdminGetEmailSettings)

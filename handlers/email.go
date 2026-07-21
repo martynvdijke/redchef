@@ -256,9 +256,6 @@ Bekijk de post hier:
 — Red Copper Chef 🍳`, post.Title, description, postURL)
 
 	for _, u := range users {
-		if u.ID == adminUserID {
-			continue
-		}
 		go func(email string) {
 			if err := SendEmail(email, subject, body); err != nil {
 				log.Printf("[email] Failed to send new-post notification to %s: %v", email, err)

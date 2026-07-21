@@ -27,6 +27,7 @@ type Post struct {
 
 type User struct {
 	ID           int64     `json:"id"`
+	Username     string    `json:"-"`
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"`
@@ -346,9 +347,9 @@ func GetUserByID(id int64) (*User, error) {
 	var paidInt int
 	var createdAt string
 	err := DB.QueryRow(
-		"SELECT id, email, password_hash, role, paid, created_at FROM users WHERE id = ?",
+		"SELECT id, username, email, password_hash, role, paid, created_at FROM users WHERE id = ?",
 		id,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &paidInt, &createdAt)
+	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.Role, &paidInt, &createdAt)
 	if err != nil {
 		return nil, err
 	}
@@ -378,6 +379,11 @@ func ListUsers() ([]User, error) {
 		users = append(users, u)
 	}
 	return users, nil
+}
+
+func UpdateUserEmail(id int64, email string) error {
+	_, err := DB.Exec("UPDATE users SET email = ? WHERE id = ?", email, id)
+	return err
 }
 
 func UpdateUserPaid(id int64, paid bool) error {

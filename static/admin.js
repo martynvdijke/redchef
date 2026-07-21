@@ -9,6 +9,7 @@ const API = {
   comments: '/api/admin/comments',
   settings: '/api/admin/settings/analytics',
   emailSettings: '/api/admin/settings/email',
+  profile: '/api/admin/settings/profile',
   setupStatus: '/api/setup/status',
   postsSimple: '/api/admin/posts/simple',
 };
@@ -81,6 +82,7 @@ function showDashboard() {
   loadComments();
   loadSettings();
   loadEmailSettings();
+  loadProfile();
 }
 
 // Upload
@@ -617,15 +619,80 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// ── Admin Profile ──
+
+async function loadProfile() {
+  try {
+    const res = await fetch(API.profile);
+    if (!res.ok) return;
+    const p = await res.json();
+    document.getElementById('profile-username').value = p.username || '';
+    document.getElementById('profile-email').value = p.email || '';
+  } catch (_) {}
+}
+
+async function handleSaveProfile(e) {
+  e.preventDefault();
+  const status = document.getElementById('profile-status');
+  const email = document.getElementById('profile-email').value.trim();
+  status.textContent = 'Saving...';
+  status.style.color = '#F5C518';
+
+  if (!email || !email.includes('@')) {
+    status.textContent = 'Please enter a valid email address';
+    status.style.color = '#D42B2B';
+    return;
+  }
+
+  try {
+    const res = await fetch(API.profile, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      status.textContent = data.error || 'Failed to save';
+      status.style.color = '#D42B2B';
+      return;
+    }
+    status.textContent = '✅ Email saved';
+    status.style.color = '#4CAF50';
+    loadProfile();
+  } catch (_) {
+    status.textContent = 'Network error';
+    status.style.color = '#D42B2B';
+  }
+}
+
+// ── Theme Toggle ──
+
+function initTheme() {
+  const btn = document.getElementById('theme-toggle');
+  const saved = localStorage.getItem('admin-theme');
+  if (saved === 'light') {
+    document.body.classList.add('light-mode');
+    btn.textContent = '☀️';
+  }
+
+  btn.addEventListener('click', () => {
+    const isLight = document.body.classList.toggle('light-mode');
+    btn.textContent = isLight ? '☀️' : '🌙';
+    localStorage.setItem('admin-theme', isLight ? 'light' : 'dark');
+  });
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('login-form').addEventListener('submit', handleLogin);
   document.getElementById('upload-form').addEventListener('submit', handleUpload);
   document.getElementById('settings-form').addEventListener('submit', handleSaveSettings);
   document.getElementById('email-settings-form').addEventListener('submit', handleSaveEmailSettings);
+  document.getElementById('profile-form').addEventListener('submit', handleSaveProfile);
   document.getElementById('btn-test-email').addEventListener('click', handleTestEmail);
   document.getElementById('edit-form').addEventListener('submit', handleEditSubmit);
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
+  initTheme();
   initUmamiTracking();
   checkAuth();
 });
