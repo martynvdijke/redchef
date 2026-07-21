@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/martynvdijke/redchef/compare/v1.10.0...v1.11.0) (2026-07-21)
+
+
+### Features
+
+* admin profile email + light mode toggle + admin gets upload notifications ([ff3d1b8](https://github.com/martynvdijke/redchef/commit/ff3d1b8f8dfc1133cf557a13aa9985a7cb8b5177))
+
 # [1.10.0](https://github.com/martynvdijke/redchef/compare/v1.9.0...v1.10.0) (2026-07-20)
 
 
