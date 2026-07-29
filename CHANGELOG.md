@@ -1,3 +1,10 @@
+## [1.12.9](https://github.com/martynvdijke/redchef/compare/v1.12.8...v1.12.9) (2026-07-29)
+
+
+### Bug Fixes
+
+* **deps:** update module modernc.org/sqlite to v1.55.0 ([#11](https://github.com/martynvdijke/redchef/issues/11)) ([1a64992](https://github.com/martynvdijke/redchef/commit/1a64992d7db77d726150efaa1918f79b7cf2c96f))
+
 ## [1.12.8](https://github.com/martynvdijke/redchef/compare/v1.12.7...v1.12.8) (2026-07-27)
 
 ## [1.12.7](https://github.com/martynvdijke/redchef/compare/v1.12.6...v1.12.7) (2026-07-26)
