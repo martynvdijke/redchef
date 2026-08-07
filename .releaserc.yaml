@@ -15,7 +15,7 @@ plugins:
   - [
       "@semantic-release/exec",
       {
-        prepareCmd: "sed -i 's/\"version\": \".*\"/\"version\": \"${nextRelease.version}\"/' package.json && sed -i 's/Variable Version = \".*\"/Variable Version = \"${nextRelease.version}\"/' main.go"
+        prepareCmd: "sed -i 's/\"version\": \".*\"/\"version\": \"${nextRelease.version}\"/' package.json && sed -i 's/var Version = \".*\"/var Version = \"${nextRelease.version}\"/' main.go"
       }
     ]
   - [
