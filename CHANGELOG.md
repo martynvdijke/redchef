@@ -1,3 +1,10 @@
+## [1.12.14](https://github.com/martynvdijke/redchef/compare/v1.12.13...v1.12.14) (2026-08-07)
+
+
+### Bug Fixes
+
+* **ci:** bump Version in main.go during semantic-release prepare ([6a5f758](https://github.com/martynvdijke/redchef/commit/6a5f75876ab32fbbb935578d1b5abd6bd06c2825))
+
 ## [1.12.13](https://github.com/martynvdijke/redchef/compare/v1.12.12...v1.12.13) (2026-08-04)
 
 
