@@ -6,9 +6,9 @@ redchef
 *.db-shm
 *.db-wal
 
-# Uploads
-uploads/*
-!uploads/.gitkeep
+# Local tooling config
+.opencode/
+openspec/
 
 # IDE
 .idea/
