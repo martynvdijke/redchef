@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/martynvdijke/redchef/compare/v1.13.0...v1.14.0) (2026-08-15)
+
+
+### Features
+
+* **trmnl:** add latest post plugin, endpoint, and release workflow ([00f68ff](https://github.com/martynvdijke/redchef/commit/00f68ff596c63bce9064165f8b97855f255b9e9e))
+
 # [1.13.0](https://github.com/martynvdijke/redchef/compare/v1.12.15...v1.13.0) (2026-08-15)
 
 
