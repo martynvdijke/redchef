@@ -1,3 +1,10 @@
+## [1.14.1](https://github.com/martynvdijke/redchef/compare/v1.14.0...v1.14.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* **trmnl:** pin plugin ID and gate trmnlp push on release ([76e4b26](https://github.com/martynvdijke/redchef/commit/76e4b26268bcea19985e50773128557305649fd5))
+
 # [1.14.0](https://github.com/martynvdijke/redchef/compare/v1.13.0...v1.14.0) (2026-08-15)
 
 
