@@ -89,8 +89,14 @@ jobs:
           docker push ghcr.io/martynvdijke/redchef:latest
           docker push ghcr.io/martynvdijke/redchef:$VERSION
 
-  notify:
+  trml:
     needs: [ci, release]
+    name: TRMNL
+    uses: ./.github/workflows/trml.yaml
+    secrets: inherit
+
+  notify:
+    needs: [ci, release, trml]
     if: ${{ always() }}
     name: Gotify Notification
     runs-on: ubuntu-latest

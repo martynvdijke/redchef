@@ -52,6 +52,7 @@ func main() {
 	publicMux.HandleFunc("GET /api/posts", handlers.ListPosts)
 	publicMux.HandleFunc("GET /api/posts/{id}", handlers.GetPost)
 	publicMux.HandleFunc("GET /api/posts/{id}/comments", handlers.ListComments)
+	publicMux.HandleFunc("GET /api/trmnl/latest", handlers.TRMNLLatestPost)
 	publicMux.HandleFunc("GET /api/favourites", handlers.ListFavourites)
 	publicMux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
 	mux.Handle("GET /api/", handlers.AuthMiddleware(publicMux))

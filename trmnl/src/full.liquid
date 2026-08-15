@@ -1,0 +1,65 @@
+<div class="layout layout--col gap--xsmall">
+  {% if latest_post %}
+    <div class="item">
+      <div class="content">
+        <span class="label label--small">Latest post</span>
+        <span class="value value--small">{{ latest_post.title }}</span>
+        {% if latest_post.description %}
+          <span class="label label--small">{{ latest_post.description }}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="grid grid--cols-2 gap--xsmall">
+      <div class="item">
+        <div class="content">
+          <span class="value value--xxsmall">&#10084; {{ latest_post.favourite_count }}</span>
+          <span class="label label--small">likes</span>
+        </div>
+      </div>
+      <div class="item">
+        <div class="content">
+          <span class="value value--xxsmall">&#128176; {{ latest_post.tip_count }}</span>
+          <span class="label label--small">tips</span>
+        </div>
+      </div>
+    </div>
+
+    {% if latest_post.media_url %}
+      <img class="image image-dither rounded image-contain" height="325px" src="{{ trml.plugin_settings.custom_fields_values.url | default: 'https://redchef.vandijke.xyz' }}/uploads/{{ latest_post.thumbnail }}" />
+    {% else %}
+      <div class="item">
+        <div class="content">
+          <span class="value value--xsmall">&#128274; Locked post</span>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if comments.size > 0 %}
+      <div class="divider--h"></div>
+      <div class="item">
+        <div class="content">
+          <span class="label label--small">Latest comments</span>
+        </div>
+      </div>
+      {% for comment in comments %}
+        <div class="item">
+          <div class="content">
+            <span class="value value--xxsmall">{{ comment.username }}</span>
+            <span class="label label--small">{{ comment.body }}</span>
+          </div>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% else %}
+    <div class="item">
+      <div class="content">
+        <span class="value value--xsmall">No post yet</span>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<div class="title_bar">
+  <span class="title">RedChef</span>
+</div>

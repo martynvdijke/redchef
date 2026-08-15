@@ -561,9 +561,9 @@ func GetPosts(filter *PostFilter) ([]Post, error) {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	orderBy := "ORDER BY created_at DESC"
+	orderBy := "ORDER BY created_at DESC, id DESC"
 	if filter != nil && filter.Sort == "oldest" {
-		orderBy = "ORDER BY created_at ASC"
+		orderBy = "ORDER BY created_at ASC, id ASC"
 	}
 
 	rows, err := DB.Query(query+" "+orderBy, args...)
