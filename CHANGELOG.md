@@ -1,3 +1,15 @@
+# [1.13.0](https://github.com/martynvdijke/redchef/compare/v1.12.15...v1.13.0) (2026-08-15)
+
+
+### Bug Fixes
+
+* **media:** prevent duplicate media filenames across restarts ([b41f0df](https://github.com/martynvdijke/redchef/commit/b41f0df80bb9aecdb5b6399db8e564b5fce6b8c7))
+
+
+### Features
+
+* **admin:** replace a post's media from the edit modal ([374f015](https://github.com/martynvdijke/redchef/commit/374f015839ee3813a4195b36b0d18ee8b3233122))
+
 ## [1.12.15](https://github.com/martynvdijke/redchef/compare/v1.12.14...v1.12.15) (2026-08-10)
 
 ## [1.12.14](https://github.com/martynvdijke/redchef/compare/v1.12.13...v1.12.14) (2026-08-07)
