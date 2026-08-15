@@ -666,11 +666,23 @@ func AdminSetPostLinks(w http.ResponseWriter, r *http.Request) {
 
 // ── ID Generator ──
 
-var idCounter int64
+var (
+	idMu      sync.Mutex
+	idCounter int64
+)
+
+func init() {
+	// Seed with the current time so generated IDs never collide across
+	// process restarts: the counter only ever increments from here, and
+	// time only moves forward.
+	idCounter = time.Now().UnixNano()
+}
 
 func generateID() int64 {
+	idMu.Lock()
+	defer idMu.Unlock()
 	idCounter++
-	return idCounter + int64(os.Getpid())*1000000
+	return idCounter
 }
 
 // ── Media Processing ──
@@ -686,9 +698,9 @@ func processMedia(postID int64, rawFilename, mediaType, ext string) {
 
 	switch mediaType {
 	case "photo":
-		processedFilename, err = processImage(srcPath, ext)
+		processedFilename, err = processImage(postID, srcPath, ext)
 	case "video":
-		processedFilename, thumbnailFilename, err = processVideo(srcPath)
+		processedFilename, thumbnailFilename, err = processVideo(postID, srcPath)
 	default:
 		err = fmt.Errorf("unknown media type: %s", mediaType)
 	}

@@ -28,8 +28,11 @@ func init() {
 	}
 }
 
-func processImage(srcPath, ext string) (string, error) {
-	outFilename := fmt.Sprintf("%d%s", generateID(), ext)
+// processImage resizes/compresses the uploaded photo and stores the result
+// under the post ID, which is unique and monotonic in the database, so media
+// filenames can never collide across uploads or process restarts.
+func processImage(postID int64, srcPath, ext string) (string, error) {
+	outFilename := fmt.Sprintf("%d%s", postID, ext)
 	outPath := filepath.Join(uploadDir, outFilename)
 
 	img, err := imaging.Open(srcPath, imaging.AutoOrientation(true))
@@ -94,11 +97,11 @@ func hasTransparency(img image.Image) bool {
 
 // ── Video Processing ──
 
-func processVideo(srcPath string) (string, string, error) {
-	outFilename := fmt.Sprintf("%d.mp4", generateID())
+func processVideo(postID int64, srcPath string) (string, string, error) {
+	outFilename := fmt.Sprintf("%d.mp4", postID)
 	outPath := filepath.Join(uploadDir, outFilename)
 
-	thumbFilename := fmt.Sprintf("%d_thumb.jpg", generateID())
+	thumbFilename := fmt.Sprintf("%d_thumb.jpg", postID)
 	thumbPath := filepath.Join(uploadDir, thumbFilename)
 
 	// Transcode to H.264/AAC, max 1080p, 8 Mbps
