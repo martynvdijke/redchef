@@ -69,6 +69,7 @@ func main() {
 	adminMux.HandleFunc("POST /api/admin/upload", handlers.AdminUpload)
 	adminMux.HandleFunc("DELETE /api/admin/posts/{id}", handlers.AdminDeletePost)
 	adminMux.HandleFunc("PATCH /api/admin/posts/{id}", handlers.AdminUpdatePost)
+	adminMux.HandleFunc("PUT /api/admin/posts/{id}/media", handlers.AdminReplaceMedia)
 	adminMux.HandleFunc("GET /api/admin/users", handlers.AdminListUsers)
 	adminMux.HandleFunc("PATCH /api/admin/users/{id}", handlers.AdminUpdateUser)
 	adminMux.HandleFunc("DELETE /api/admin/users/{id}", handlers.AdminDeleteUser)

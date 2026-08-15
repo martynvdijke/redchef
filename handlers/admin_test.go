@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -477,5 +478,162 @@ func TestAdminUpload_WebPSupport(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result.MediaType != "photo" {
 		t.Errorf("expected media_type 'photo', got %q", result.MediaType)
+	}
+}
+
+// ── Media Replacement ──
+
+func replaceRequest(t *testing.T, postID int64, fileData []byte, filename string) *http.Request {
+	t.Helper()
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	if fileData != nil {
+		part, err := w.CreateFormFile("file", filename)
+		if err != nil {
+			t.Fatalf("CreateFormFile: %v", err)
+		}
+		part.Write(fileData)
+	}
+	w.Close()
+	req := authenticatedRequest(t, "PUT", fmt.Sprintf("/api/admin/posts/%d/media", postID), &buf)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.SetPathValue("id", fmt.Sprintf("%d", postID))
+	return req
+}
+
+// Replacing a photo reprocesses it under the post ID, marking the post as
+// processed. The filename stays the same for the same media type, so the old
+// file is simply overwritten.
+func TestAdminReplaceMedia_Success(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	imgData := createTestImage(t)
+	req := buildUploadRequest(t, "Replace Me", "", "", imgData, "first.jpg")
+	resp := httptest.NewRecorder()
+	AdminUpload(resp, req)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("upload: expected 201, got %d: %s", resp.Code, resp.Body.String())
+	}
+	ProcessWG.Wait() // wait for async processing
+
+	post, err := db.GetPost(1)
+	if err != nil {
+		t.Fatalf("get post: %v", err)
+	}
+	want := "1.jpg"
+	if post.Filename != want {
+		t.Fatalf("initial filename = %q, want %q", post.Filename, want)
+	}
+
+	replaceResp := httptest.NewRecorder()
+	AdminReplaceMedia(replaceResp, replaceRequest(t, post.ID, imgData, "replacement.jpg"))
+
+	if replaceResp.Code != http.StatusOK {
+		t.Fatalf("replace: expected 200, got %d: %s", replaceResp.Code, replaceResp.Body.String())
+	}
+
+	updated, _ := db.GetPost(post.ID)
+	if updated.Filename != want {
+		t.Errorf("filename = %q, want %q", updated.Filename, want)
+	}
+	if updated.Processing {
+		t.Error("expected processing=false after replace")
+	}
+	if _, err := os.Stat(filepath.Join(uploadDir, updated.Filename)); err != nil {
+		t.Errorf("media file missing after replace: %v", err)
+	}
+}
+
+// A legacy post referencing a pre-fix filename (e.g. "1000002.jpg") that is no
+// longer referenced by any other post gets its old file removed after replace.
+func TestAdminReplaceMedia_RemovesLegacyFile(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	post, err := db.CreatePost("Legacy", "", "photo", "1000002.jpg", "", false)
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+	legacyFile := filepath.Join(uploadDir, "1000002.jpg")
+	if err := os.WriteFile(legacyFile, []byte("old bytes"), 0644); err != nil {
+		t.Fatalf("write legacy file: %v", err)
+	}
+
+	replaceResp := httptest.NewRecorder()
+	AdminReplaceMedia(replaceResp, replaceRequest(t, post.ID, createTestImage(t), "new.png"))
+
+	if replaceResp.Code != http.StatusOK {
+		t.Fatalf("replace: expected 200, got %d: %s", replaceResp.Code, replaceResp.Body.String())
+	}
+
+	updated, _ := db.GetPost(post.ID)
+	want := fmt.Sprintf("%d.jpg", post.ID)
+	if updated.Filename != want {
+		t.Errorf("filename = %q, want %q", updated.Filename, want)
+	}
+	if _, err := os.Stat(legacyFile); !os.IsNotExist(err) {
+		t.Errorf("legacy file should be removed, stat err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(uploadDir, want)); err != nil {
+		t.Errorf("new media file missing: %v", err)
+	}
+}
+
+// If another post still references the old filename (possible for legacy posts
+// that shared files), the old file must be kept.
+func TestAdminReplaceMedia_KeepsSharedFile(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	postA, err := db.CreatePost("A", "", "photo", "shared.jpg", "", false)
+	if err != nil {
+		t.Fatalf("create post A: %v", err)
+	}
+	if _, err := db.CreatePost("B", "", "photo", "shared.jpg", "", false); err != nil {
+		t.Fatalf("create post B: %v", err)
+	}
+	sharedFile := filepath.Join(uploadDir, "shared.jpg")
+	if err := os.WriteFile(sharedFile, []byte("shared bytes"), 0644); err != nil {
+		t.Fatalf("write shared file: %v", err)
+	}
+
+	replaceResp := httptest.NewRecorder()
+	AdminReplaceMedia(replaceResp, replaceRequest(t, postA.ID, createTestImage(t), "new.jpg"))
+
+	if replaceResp.Code != http.StatusOK {
+		t.Fatalf("replace: expected 200, got %d: %s", replaceResp.Code, replaceResp.Body.String())
+	}
+
+	if _, err := os.Stat(sharedFile); err != nil {
+		t.Errorf("shared file should be kept while another post references it: %v", err)
+	}
+}
+
+func TestAdminReplaceMedia_NotFound(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	replaceResp := httptest.NewRecorder()
+	AdminReplaceMedia(replaceResp, replaceRequest(t, 99999, createTestImage(t), "new.jpg"))
+
+	if replaceResp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", replaceResp.Code, replaceResp.Body.String())
+	}
+}
+
+func TestAdminReplaceMedia_MissingFile(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	if _, err := db.CreatePost("No Media", "", "photo", "x.jpg", "", false); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	replaceResp := httptest.NewRecorder()
+	AdminReplaceMedia(replaceResp, replaceRequest(t, 1, nil, ""))
+
+	if replaceResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", replaceResp.Code, replaceResp.Body.String())
 	}
 }

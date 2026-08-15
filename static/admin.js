@@ -236,12 +236,71 @@ function openEditModal(postId) {
   currentEditPostId = postId;
   document.getElementById('edit-title').value = post.title || '';
   document.getElementById('edit-description').value = post.description || '';
+
+  // Show the current media and reset the replace-media state.
+  const src = post.thumbnail || post.filename;
+  document.getElementById('edit-media-preview').innerHTML = src
+    ? `<img src="/uploads/${src}" alt="Current media" style="max-width:100%;max-height:130px;border-radius:4px;object-fit:cover;">`
+    : '<span style="color:#888;font-size:13px;">No media</span>';
+  document.getElementById('edit-media-file').value = '';
+  document.getElementById('replace-media-status').textContent = '';
+  document.getElementById('replace-media-btn').disabled = false;
+
   document.getElementById('edit-modal').style.display = 'flex';
 }
 
 function closeEditModal() {
   document.getElementById('edit-modal').style.display = 'none';
   currentEditPostId = null;
+}
+
+// Replace the media file of the post being edited. Keeps the post's ID,
+// title, description and lock state; only the photo/video is swapped.
+async function replaceMedia() {
+  if (!currentEditPostId) return;
+
+  const fileInput = document.getElementById('edit-media-file');
+  const file = fileInput.files[0];
+  if (!file) {
+    showToast('❌ Choose a file first');
+    return;
+  }
+
+  const btn = document.getElementById('replace-media-btn');
+  const statusEl = document.getElementById('replace-media-status');
+  btn.disabled = true;
+  statusEl.textContent = '⏳ Uploading and processing...';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch(`${API.posts}/${currentEditPostId}/media`, {
+      method: 'PUT',
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Failed to replace media'));
+      statusEl.textContent = '';
+      return;
+    }
+    showToast('✅ Media replaced');
+    statusEl.textContent = '✅ Media replaced';
+    await loadPosts();
+    const post = allPosts.find(p => p.id === currentEditPostId);
+    if (post) {
+      const src = post.thumbnail || post.filename;
+      document.getElementById('edit-media-preview').innerHTML = src
+        ? `<img src="/uploads/${src}?v=${Date.now()}" alt="Current media" style="max-width:100%;max-height:130px;border-radius:4px;object-fit:cover;">`
+        : '<span style="color:#888;font-size:13px;">No media</span>';
+    }
+  } catch (_) {
+    showToast('❌ Failed to replace media');
+    statusEl.textContent = '';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function handleEditSubmit(e) {

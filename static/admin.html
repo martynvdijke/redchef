@@ -649,6 +649,14 @@
         </div>
         <button type="submit" class="btn-primary" style="margin-top:0;">Save Changes</button>
       </form>
+      <div style="border-top:1px solid rgba(255,255,255,0.1);margin-top:16px;padding-top:16px;">
+        <label style="display:block;margin-bottom:6px;color:#e5e5e5;font-size:14px;font-weight:600;">Replace Media</label>
+        <div id="edit-media-preview" style="margin-bottom:8px;"></div>
+        <input type="file" id="edit-media-file" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mov">
+        <p class="auth-subtitle" style="font-size:12px;margin-top:6px;">Upload a new photo or video to replace the current one. Title, description and lock state are kept.</p>
+        <button type="button" class="btn-primary" id="replace-media-btn" onclick="replaceMedia()" style="margin-top:4px;width:100%;">Replace Media</button>
+        <div id="replace-media-status" style="margin-top:8px;font-size:13px;"></div>
+      </div>
       <button class="nav-auth-btn nav-auth-btn-outline" onclick="closeEditModal()" style="margin-top:8px;">Cancel</button>
     </div>
   </div>

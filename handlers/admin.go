@@ -143,6 +143,116 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// AdminReplaceMedia replaces the media file of an existing post. The post's
+// ID, title, description and lock state are preserved. Old media files are
+// only removed once no other post still references them — legacy posts may
+// share filenames due to the pre-fix ID collision bug.
+func AdminReplaceMedia(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	post, err := db.GetPost(id)
+	if err != nil {
+		jsonError(w, "post not found", http.StatusNotFound)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		jsonError(w, "file too large or invalid form", http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		jsonError(w, "missing file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	var mediaType string
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+		mediaType = "photo"
+	case ".mp4", ".webm", ".mov":
+		mediaType = "video"
+	default:
+		jsonError(w, "unsupported file type: "+ext, http.StatusBadRequest)
+		return
+	}
+
+	// Save the upload to a temporary raw file, then process it under the post
+	// ID so the resulting filename is unique to this post.
+	rawFilename := fmt.Sprintf("_raw_%d%s", generateID(), ext)
+	dst, err := os.Create(filepath.Join(uploadDir, rawFilename))
+	if err != nil {
+		jsonError(w, "failed to save file", http.StatusInternalServerError)
+		return
+	}
+	io.Copy(dst, file)
+	dst.Close()
+	srcPath := filepath.Join(uploadDir, rawFilename)
+	defer os.Remove(srcPath)
+
+	var newFilename, newThumbnail string
+	switch mediaType {
+	case "photo":
+		newFilename, err = processImage(post.ID, srcPath, ext)
+	case "video":
+		newFilename, newThumbnail, err = processVideo(post.ID, srcPath)
+	}
+	if err != nil {
+		log.Printf("[media] Error replacing post %d media: %v", post.ID, err)
+		jsonError(w, "failed to process media", http.StatusInternalServerError)
+		return
+	}
+
+	// Point the post at the new media first, then clean up the old files.
+	if err := db.UpdatePostProcessing(post.ID, newFilename, newThumbnail); err != nil {
+		log.Printf("[media] Error updating post %d after media replace: %v", post.ID, err)
+		jsonError(w, "failed to update post", http.StatusInternalServerError)
+		return
+	}
+
+	if newFilename != post.Filename {
+		removeIfUnreferenced(post.Filename)
+	}
+	if newThumbnail != post.Thumbnail {
+		removeIfUnreferenced(post.Thumbnail)
+	}
+
+	log.Printf("[media] Post %d media replaced: %s", post.ID, newFilename)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":        post.ID,
+		"filename":  newFilename,
+		"thumbnail": newThumbnail,
+		"message":   "Media replaced",
+	})
+}
+
+// removeIfUnreferenced deletes a media file from disk unless another post
+// still references it (legacy posts may share filenames).
+func removeIfUnreferenced(filename string) {
+	if filename == "" {
+		return
+	}
+	var refs int
+	if err := db.DB.QueryRow("SELECT COUNT(*) FROM posts WHERE filename = ? OR thumbnail = ?", filename, filename).Scan(&refs); err != nil {
+		log.Printf("[media] Could not check references for %s: %v", filename, err)
+		return
+	}
+	if refs <= 0 {
+		if err := os.Remove(filepath.Join(uploadDir, filename)); err != nil && !os.IsNotExist(err) {
+			log.Printf("[media] Could not remove old media %s: %v", filename, err)
+		}
+	}
+}
+
 type UpdatePostRequest struct {
 	Locked      *bool   `json:"locked"`
 	Title       *string `json:"title"`
