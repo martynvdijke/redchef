@@ -1,3 +1,10 @@
+## [1.15.1](https://github.com/martynvdijke/redchef/compare/v1.15.0...v1.15.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* **trmnl:** stretch plugin layouts ([4027cd8](https://github.com/martynvdijke/redchef/commit/4027cd83bd23bfd3771964f378ac159d8a0e48ca))
+
 # [1.15.0](https://github.com/martynvdijke/redchef/compare/v1.14.2...v1.15.0) (2026-08-16)
 
 
