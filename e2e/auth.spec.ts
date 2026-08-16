@@ -108,3 +108,31 @@ test('logout clears session', async ({ request }) => {
   const body = await meRes.json();
   expect(body.authenticated).toBe(false);
 });
+
+test('forgot password flow shows confirmation', async ({ page }) => {
+  await page.goto(server.url + '/');
+  await page.click('#btn-login');
+  await page.click('#switch-to-forgot');
+
+  // Forgot modal replaces the login modal
+  await expect(page.locator('#forgot-modal')).toBeVisible();
+
+  await page.fill('#forgot-email', `nobody-${Date.now()}@test.com`);
+  await page.click('#forgot-form button[type="submit"]');
+
+  // Always shows the generic success message (no account enumeration)
+  await expect(page.locator('#forgot-form .auth-success')).toBeVisible();
+});
+
+test('reset password page rejects invalid token', async ({ page }) => {
+  await page.goto(server.url + '/reset?token=bogus-token');
+
+  // Reset modal opens automatically from the ?token= query param
+  await expect(page.locator('#reset-modal')).toBeVisible();
+
+  await page.fill('#reset-password', 'newpass123');
+  await page.fill('#reset-confirm', 'newpass123');
+  await page.click('#reset-form button[type="submit"]');
+
+  await expect(page.locator('#reset-error')).toContainText('invalid or expired');
+});

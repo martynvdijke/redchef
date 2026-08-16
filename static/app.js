@@ -5,6 +5,8 @@ const API = {
   login: '/api/auth/login',
   register: '/api/auth/register',
   logout: '/api/auth/logout',
+  forgot: '/api/auth/forgot',
+  reset: '/api/auth/reset',
   posts: '/api/posts',
   unlock: '/api/pay/unlock',
   payItem: '/api/pay/item',
@@ -145,6 +147,106 @@ async function handleLogout() {
   currentUser = null;
   showLoggedOut();
   loadContent();
+}
+
+// ── Forgot / Reset Password ──
+
+function openForgotModal() {
+  closeLoginModal();
+  const form = $('forgot-form');
+  // Restore the form if it was replaced by the success state
+  if (form.querySelector('.auth-success')) {
+    form.innerHTML = `
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="forgot-email" placeholder="your@email.com" autocomplete="email" required>
+      </div>
+      <button type="submit" class="btn-primary">Send Reset Link</button>
+      <div class="auth-error" id="forgot-error"></div>
+    `;
+    $('forgot-form').addEventListener('submit', handleForgot);
+  }
+  $('forgot-modal').style.display = 'flex';
+  $('forgot-error').textContent = '';
+  $('forgot-email').value = '';
+}
+
+function closeForgotModal() {
+  $('forgot-modal').style.display = 'none';
+}
+
+async function handleForgot(e) {
+  e.preventDefault();
+  const email = $('forgot-email').value.trim();
+  const err = $('forgot-error');
+
+  err.textContent = '';
+  if (!email || !email.includes('@')) { err.textContent = 'Enter a valid email'; return; }
+
+  const btn = e.target.querySelector('button[type="submit"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+  try {
+    const res = await fetch(API.forgot, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) { err.textContent = data.error || 'Request failed'; return; }
+
+    // Always show the same message so accounts can't be enumerated
+    $('forgot-form').innerHTML = `
+      <div class="auth-success">
+        <div style="font-size:2rem;margin-bottom:8px;">📬</div>
+        <p>If an account exists for <strong>${escapeHtml(email)}</strong>, a reset link is on its way. Check your inbox (and spam folder).</p>
+      </div>
+    `;
+  } catch (_) {
+    err.textContent = 'Network error — is the server running?';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send Reset Link'; }
+  }
+}
+
+function openResetModal() {
+  $('reset-modal').style.display = 'flex';
+  $('reset-error').textContent = '';
+}
+
+function closeResetModal() {
+  $('reset-modal').style.display = 'none';
+}
+
+async function handleReset(e) {
+  e.preventDefault();
+  const token = new URLSearchParams(window.location.search).get('token') || '';
+  const password = $('reset-password').value;
+  const confirm = $('reset-confirm').value;
+  const err = $('reset-error');
+
+  err.textContent = '';
+  if (!token) { err.textContent = 'Missing reset token. Request a new link.'; return; }
+  if (password.length < 6) { err.textContent = 'Password must be at least 6 characters'; return; }
+  if (password !== confirm) { err.textContent = 'Passwords do not match'; return; }
+
+  try {
+    const res = await fetch(API.reset, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password, confirm_password: confirm }),
+    });
+    const data = await res.json();
+    if (!res.ok) { err.textContent = data.error || 'Reset failed'; return; }
+
+    closeResetModal();
+    // Remove the token from the URL so it doesn't linger in history
+    history.replaceState({}, '', window.location.pathname);
+    showToast('🔑 Password updated! Sign in with your new password.');
+    openLoginModal();
+  } catch (_) {
+    err.textContent = 'Network error — is the server running?';
+  }
 }
 
 // ── Modals ──
@@ -876,6 +978,28 @@ document.addEventListener('DOMContentLoaded', () => {
     closeRegisterModal();
     openLoginModal();
   });
+
+  // Forgot / reset password modals
+  $('switch-to-forgot').addEventListener('click', openForgotModal);
+  $('forgot-modal-close').addEventListener('click', closeForgotModal);
+  $('forgot-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeForgotModal();
+  });
+  $('forgot-form').addEventListener('submit', handleForgot);
+  $('switch-forgot-to-login').addEventListener('click', () => {
+    closeForgotModal();
+    openLoginModal();
+  });
+  $('reset-modal-close').addEventListener('click', closeResetModal);
+  $('reset-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeResetModal();
+  });
+  $('reset-form').addEventListener('submit', handleReset);
+
+  // Open the reset modal when arriving with a reset token
+  if (new URLSearchParams(window.location.search).get('token')) {
+    openResetModal();
+  }
 
   // Paywall
   $('btn-unlock').addEventListener('click', handleUnlock);

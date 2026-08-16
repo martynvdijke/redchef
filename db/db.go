@@ -103,6 +103,15 @@ type UserSession struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type PasswordReset struct {
+	ID        int64
+	UserID    int64
+	TokenHash string
+	ExpiresAt time.Time
+	Used      bool
+	CreatedAt time.Time
+}
+
 var DB *sql.DB
 
 func Init(dbPath string) error {
@@ -235,6 +244,16 @@ func migrate() error {
 			gotify_url TEXT NOT NULL DEFAULT '',
 			gotify_token TEXT NOT NULL DEFAULT '',
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE IF NOT EXISTS password_resets (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			token_hash TEXT UNIQUE NOT NULL,
+			expires_at DATETIME NOT NULL,
+			used INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
 		);
 	`)
 
@@ -507,6 +526,76 @@ func GetSession(token string) (*Session, error) {
 
 func DeleteSession(token string) error {
 	_, err := DB.Exec("DELETE FROM sessions WHERE token = ?", token)
+	return err
+}
+
+// ── Password Resets ──
+
+// GenerateResetToken returns a fresh raw token plus its SHA-256 hash.
+// Only the hash is ever stored, so a DB leak doesn't expose usable tokens.
+func GenerateResetToken() (raw, tokenHash string) {
+	raw = generateToken(32)
+	return raw, sha256Hash(raw)
+}
+
+// HashToken hashes a raw reset token for lookup against stored hashes.
+func HashToken(token string) string {
+	return sha256Hash(token)
+}
+
+// CreatePasswordReset stores a reset token hash for a user, discarding any
+// previous resets for that user as well as all globally expired resets.
+func CreatePasswordReset(userID int64, tokenHash string, expiresAt time.Time) error {
+	DB.Exec("DELETE FROM password_resets WHERE user_id = ? OR expires_at < datetime('now')", userID)
+	_, err := DB.Exec(
+		"INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
+		userID, tokenHash, expiresAt,
+	)
+	return err
+}
+
+// GetPasswordReset returns a valid (unused, unexpired) reset for a token hash.
+// Expired or already-used resets are deleted on sight.
+func GetPasswordReset(tokenHash string) (*PasswordReset, error) {
+	p := &PasswordReset{}
+	var usedInt int
+	var expiresAt, createdAt string
+	err := DB.QueryRow(
+		"SELECT id, user_id, token_hash, expires_at, used, created_at FROM password_resets WHERE token_hash = ?",
+		tokenHash,
+	).Scan(&p.ID, &p.UserID, &p.TokenHash, &expiresAt, &usedInt, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	p.Used = usedInt == 1
+	p.ExpiresAt, _ = parseTime(expiresAt)
+	p.CreatedAt, _ = parseTime(createdAt)
+	if p.Used || time.Now().After(p.ExpiresAt) {
+		DB.Exec("DELETE FROM password_resets WHERE id = ?", p.ID)
+		return nil, sql.ErrNoRows
+	}
+	return p, nil
+}
+
+// ConsumePasswordReset marks a reset as used so it can't be replayed.
+func ConsumePasswordReset(tokenHash string) error {
+	_, err := DB.Exec("UPDATE password_resets SET used = 1 WHERE token_hash = ?", tokenHash)
+	return err
+}
+
+// UpdateUserPassword hashes and stores a new password for a user.
+func UpdateUserPassword(userID int64, password string) error {
+	hash, err := hashPassword(password)
+	if err != nil {
+		return err
+	}
+	_, err = DB.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hash, userID)
+	return err
+}
+
+// DeleteUserSessionsForUser invalidates every session a user holds.
+func DeleteUserSessionsForUser(userID int64) error {
+	_, err := DB.Exec("DELETE FROM user_sessions WHERE user_id = ?", userID)
 	return err
 }
 

@@ -41,6 +41,8 @@ func main() {
 	mux.HandleFunc("POST /api/auth/register", handlers.Register)
 	mux.HandleFunc("POST /api/auth/login", handlers.Login)
 	mux.HandleFunc("POST /api/auth/logout", handlers.Logout)
+	mux.HandleFunc("POST /api/auth/forgot", handlers.ForgotPassword)
+	mux.HandleFunc("POST /api/auth/reset", handlers.ResetPassword)
 	mux.Handle("GET /api/auth/me", handlers.AuthMiddleware(http.HandlerFunc(handlers.Me)))
 
 	// Paywall API
@@ -119,6 +121,13 @@ func main() {
 	// Note: path is rewritten to "/" (not "/index.html") because FileServer
 	// 301-redirects /index.html to / and the post id would be lost.
 	mux.HandleFunc("GET /posts/{id}", func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = "/"
+		staticHandler.ServeHTTP(w, r)
+	})
+
+	// Password reset page — serves the SPA, which renders the reset modal
+	// from the ?token= query parameter.
+	mux.HandleFunc("GET /reset", func(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = "/"
 		staticHandler.ServeHTTP(w, r)
 	})

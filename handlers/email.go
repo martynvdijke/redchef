@@ -153,6 +153,28 @@ Tot in de keuken!
 	SendGotifyNotification("Nieuwe gebruiker", fmt.Sprintf("%s heeft een account aangemaakt", email))
 }
 
+// SendPasswordResetEmail emails a single-use link to reset a forgotten password.
+func SendPasswordResetEmail(email, resetURL string) {
+	subject := "Wachtwoord resetten — Red Copper Chef 🔑"
+	body := fmt.Sprintf(`Hoi!
+
+We hebben een verzoek gekregen om je wachtwoord voor Red Copper Chef te resetten.
+
+Klik op de link hieronder om een nieuw wachtwoord in te stellen (de link is 1 uur geldig):
+
+%s
+
+Als je dit niet hebt aangevraagd, kun je dit bericht gewoon negeren — je wachtwoord blijft dan ongewijzigd.
+
+— Red Copper Chef 🍳
+
+(Dit is een automatisch bericht, antwoorden heeft geen zin — de Chef leest alleen rooksignalen.)`, resetURL)
+
+	if err := SendEmail(email, subject, body); err != nil {
+		log.Printf("[email] Failed to send password reset email to %s: %v", email, err)
+	}
+}
+
 // SendSubscriptionInvoice emails a mock invoice for the €4,99/maand subscription.
 func SendSubscriptionInvoice(email string) {
 	subject := "Factuur: Royal Member abonnement — €4,99/maand 🧾"

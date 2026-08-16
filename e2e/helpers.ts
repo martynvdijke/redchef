@@ -18,7 +18,9 @@ export interface ServerInstance {
  */
 export function ensureBinary(): void {
   if (!fs.existsSync(BINARY)) {
-    execSync('go build -o ' + BINARY + ' ./...', { cwd: ROOT, stdio: 'pipe' });
+    // Build only the main package (module root) — `./...` matches multiple
+    // packages and would require -o to be a directory.
+    execSync('go build -o ' + BINARY + ' .', { cwd: ROOT, stdio: 'pipe' });
   }
 }
 
