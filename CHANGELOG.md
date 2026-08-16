@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/martynvdijke/redchef/compare/v1.14.2...v1.15.0) (2026-08-16)
+
+
+### Features
+
+* **auth:** add password reset flow with emailed reset links ([e84a300](https://github.com/martynvdijke/redchef/commit/e84a300b2e0dc12fbb2b80c6825bf64bd64e7065))
+
 ## [1.14.2](https://github.com/martynvdijke/redchef/compare/v1.14.1...v1.14.2) (2026-08-16)
 
 ## [1.14.1](https://github.com/martynvdijke/redchef/compare/v1.14.0...v1.14.1) (2026-08-15)
