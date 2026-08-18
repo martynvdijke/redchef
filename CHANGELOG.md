@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/martynvdijke/redchef/compare/v1.15.1...v1.16.0) (2026-08-18)
+
+
+### Features
+
+* **trmnl:** make posts fully readable and viewable ([6b2e05f](https://github.com/martynvdijke/redchef/commit/6b2e05fa8529eea8a145537aba9e400f3d685fde))
+
 ## [1.15.1](https://github.com/martynvdijke/redchef/compare/v1.15.0...v1.15.1) (2026-08-16)
 
 
