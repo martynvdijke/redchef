@@ -6,11 +6,15 @@
           <div class="content">
             <span class="label label--small">Latest post</span>
             <span class="value value--xsmall">{{ latest_post.title }}</span>
-            {% if latest_post.description %}
-              <span class="label label--small">{{ latest_post.description }}</span>
-            {% endif %}
           </div>
         </div>
+        {% if latest_post.description %}
+          <div class="item">
+            <div class="content">
+              <span class="value value--xxsmall">{{ latest_post.description }}</span>
+            </div>
+          </div>
+        {% endif %}
         <div class="divider--h"></div>
         <div class="item">
           <div class="content">
@@ -21,13 +25,7 @@
           </div>
         </div>
         {% if latest_post.media_url %}
-          <img class="image image-dither rounded image-contain" height="210px" src="{{ trml.plugin_settings.custom_fields_values.url | default: 'https://redchef.vandijke.xyz' }}/uploads/{{ latest_post.thumbnail }}" />
-        {% else %}
-          <div class="item">
-            <div class="content">
-              <span class="value value--xsmall">&#128274; Locked post</span>
-            </div>
-          </div>
+          <img class="image image-dither rounded image-contain" height="140px" src="{{ trml.plugin_settings.custom_fields_values.url | default: 'https://redchef.vandijke.xyz' }}/uploads/{{ latest_post.thumbnail }}" />
         {% endif %}
       {% else %}
         <div class="item">
@@ -52,10 +50,7 @@
           {% if forloop.index <= 3 %}
             <div class="item">
               <div class="content">
-                <span class="value value--xxsmall">{{ comment.username }}</span>
-              </div>
-              <div class="content">
-                <span class="label label--small">{{ comment.body }}</span>
+                <span class="value value--xxsmall">{{ comment.username }}: {{ comment.body }}</span>
               </div>
             </div>
           {% endif %}

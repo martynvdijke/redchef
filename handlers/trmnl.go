@@ -15,7 +15,7 @@ type trmnlComment struct {
 }
 
 // trmnlLatestPost is the enriched latest post shape exposed to the TRMNL plugin.
-// MediaURL is omitted (null) for locked posts, mirroring handlers/public.go.
+// Posts are jokes, so the media is always exposed regardless of lock state.
 type trmnlLatestPost struct {
 	ID             int64   `json:"id"`
 	Title          string  `json:"title"`
@@ -35,8 +35,9 @@ const maxTRMNLComments = 4
 
 // TRMNLLatestPost returns the newest post with its engagement counts and the
 // newest comments, shaped for the TRMNL polling plugin. The endpoint is
-// public (auth-aware, not auth-required) — post metadata, counts and comment
-// text are already exposed via the existing public API.
+// public — post metadata, counts and comment text are already exposed via the
+// existing public API, and since posts are jokes, media is included even for
+// locked posts.
 func TRMNLLatestPost(w http.ResponseWriter, r *http.Request) {
 	posts, err := db.GetPosts(&db.PostFilter{})
 	if err != nil {
@@ -81,10 +82,8 @@ func TRMNLLatestPost(w http.ResponseWriter, r *http.Request) {
 			TipCount:       tipCount,
 			CommentCount:   commentCount,
 		}
-		if !post.Locked {
-			url := "/uploads/" + post.Filename
-			latest.MediaURL = &url
-		}
+		url := "/uploads/" + post.Filename
+		latest.MediaURL = &url
 		response.LatestPost = latest
 
 		// GetCommentsByPost returns oldest-first; take the newest four and

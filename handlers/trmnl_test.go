@@ -139,7 +139,7 @@ func TestTRMNLLatestPost_CommentsCappedAtFour(t *testing.T) {
 	}
 }
 
-func TestTRMNLLatestPost_LockedOmitsMediaURL(t *testing.T) {
+func TestTRMNLLatestPost_LockedIncludesMediaURL(t *testing.T) {
 	cleanup := setupHandlerTest(t)
 	defer cleanup()
 
@@ -160,7 +160,8 @@ func TestTRMNLLatestPost_LockedOmitsMediaURL(t *testing.T) {
 	if latest["locked"] != true {
 		t.Errorf("expected locked=true, got %v", latest["locked"])
 	}
-	if latest["media_url"] != nil {
-		t.Error("locked post should not expose media_url")
+	// Posts are jokes, so the TRMNL plugin always gets the media.
+	if latest["media_url"] == nil {
+		t.Error("locked post should still expose media_url")
 	}
 }
