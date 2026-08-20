@@ -1,3 +1,10 @@
+## [1.16.1](https://github.com/martynvdijke/redchef/compare/v1.16.0...v1.16.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#20](https://github.com/martynvdijke/redchef/issues/20)) ([d34c912](https://github.com/martynvdijke/redchef/commit/d34c91214c29256ef146a9b7ed879bcdc26fa757))
+
 # [1.16.0](https://github.com/martynvdijke/redchef/compare/v1.15.1...v1.16.0) (2026-08-18)
 
 
