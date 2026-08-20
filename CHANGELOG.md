@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/martynvdijke/redchef/compare/v1.16.1...v1.17.0) (2026-08-20)
+
+
+### Features
+
+* **feed:** add DAS/RSS feed with title, message and image ([3356054](https://github.com/martynvdijke/redchef/commit/3356054c86c5a660f66359b82bf204d48511fa46))
+
 ## [1.16.1](https://github.com/martynvdijke/redchef/compare/v1.16.0...v1.16.1) (2026-08-20)
 
 
