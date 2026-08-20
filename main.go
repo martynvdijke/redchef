@@ -49,6 +49,12 @@ func main() {
 	mux.Handle("POST /api/pay/unlock", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.PayUnlock))))
 	mux.Handle("POST /api/pay/item", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.PayItem))))
 
+	// DAS / RSS feed (public, no auth required) — title, message and image per post
+	mux.HandleFunc("GET /feed.xml", handlers.Feed)
+	mux.HandleFunc("GET /rss.xml", handlers.Feed)
+	mux.HandleFunc("GET /api/feed", handlers.Feed)
+	mux.HandleFunc("GET /feed", handlers.Feed)
+
 	// Public API (auth-aware via middleware)
 	publicMux := http.NewServeMux()
 	publicMux.HandleFunc("GET /api/posts", handlers.ListPosts)
