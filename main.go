@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 
 	"redchef/db"
 	"redchef/handlers"
@@ -62,6 +63,7 @@ func main() {
 	publicMux.HandleFunc("GET /api/posts", handlers.ListPosts)
 	publicMux.HandleFunc("GET /api/posts/{id}", handlers.GetPost)
 	publicMux.HandleFunc("GET /api/posts/{id}/comments", handlers.ListComments)
+	publicMux.HandleFunc("GET /api/tags", handlers.ListTags)
 	publicMux.HandleFunc("GET /api/trmnl/latest", handlers.TRMNLLatestPost)
 	publicMux.HandleFunc("GET /api/favourites", handlers.ListFavourites)
 	publicMux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
@@ -134,12 +136,12 @@ func main() {
 		staticHandler.ServeHTTP(w, r)
 	})
 
-	// Shareable post page — serves the SPA, which renders the single post.
+	// Shareable post page — serves the SPA shell with server-side injected
+	// JSON-LD + Open Graph metadata so crawlers see post data without JS.
 	// Note: path is rewritten to "/" (not "/index.html") because FileServer
 	// 301-redirects /index.html to / and the post id would be lost.
 	mux.HandleFunc("GET /posts/{id}", func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = "/"
-		staticHandler.ServeHTTP(w, r)
+		handlers.RenderPostPage(w, r, indexHTMLCache())
 	})
 
 	// Password reset page — serves the SPA, which renders the reset modal
@@ -180,4 +182,22 @@ func getEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+var (
+	indexOnce     sync.Once
+	indexHTMLOnce []byte
+)
+
+// indexHTMLCache loads the embedded SPA shell once for metadata injection.
+func indexHTMLCache() []byte {
+	indexOnce.Do(func() {
+		data, err := staticFiles.ReadFile("static/index.html")
+		if err != nil {
+			log.Printf("Failed to read embedded index.html: %v", err)
+			return
+		}
+		indexHTMLOnce = data
+	})
+	return indexHTMLOnce
 }

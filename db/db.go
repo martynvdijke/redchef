@@ -14,15 +14,17 @@ import (
 )
 
 type Post struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	MediaType   string    `json:"media_type"`
-	Filename    string    `json:"filename"`
-	Thumbnail   string    `json:"thumbnail"`
-	Locked      bool      `json:"locked"`
-	Processing  bool      `json:"processing"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          int64      `json:"id"`
+	Title       string     `json:"title"`
+	Description string     `json:"description"`
+	MediaType   string     `json:"media_type"`
+	Filename    string     `json:"filename"`
+	Thumbnail   string     `json:"thumbnail"`
+	Locked      bool       `json:"locked"`
+	Processing  bool       `json:"processing"`
+	CreatedAt   time.Time  `json:"created_at"`
+	Recipe      RecipeData `json:"recipe"`
+	Tags        []string   `json:"tags,omitempty"`
 }
 
 type User struct {
@@ -256,6 +258,19 @@ func migrate() error {
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		);
 
+		CREATE TABLE IF NOT EXISTS tags (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT UNIQUE COLLATE NOCASE NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS post_tags (
+			post_id INTEGER NOT NULL,
+			tag_id INTEGER NOT NULL,
+			UNIQUE(post_id, tag_id),
+			FOREIGN KEY (post_id) REFERENCES posts(id),
+			FOREIGN KEY (tag_id) REFERENCES tags(id)
+		);
+
 		CREATE TABLE IF NOT EXISTS api_tokens (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL,
@@ -277,6 +292,7 @@ func migrate() error {
 	migrateAddColumn("tips", "amount_cents", "INTEGER NOT NULL DEFAULT 0")
 	migrateAddColumn("email_settings", "gotify_url", "TEXT NOT NULL DEFAULT ''")
 	migrateAddColumn("email_settings", "gotify_token", "TEXT NOT NULL DEFAULT ''")
+	migrateAddColumn("posts", "recipe_json", "TEXT NOT NULL DEFAULT ''")
 
 	// Seed default email settings row if table is empty
 	var emailCount int
@@ -613,11 +629,188 @@ func DeleteUserSessionsForUser(userID int64) error {
 
 // ── Posts ──
 
+// PostFilter composes the public post list query. Q/Tag/Limit/Offset extend
+// the original sort/type/date filters; pagination is opt-in via Limit > 0.
 type PostFilter struct {
 	Sort     string
 	Type     string
 	DateFrom string
 	DateTo   string
+	Q        string
+	Tag      string
+	Limit    int
+	Offset   int
+}
+
+func GetPosts(filter *PostFilter) ([]Post, error) {
+	query := "SELECT " + postColumns + " FROM posts"
+	var conditions []string
+	var args []interface{}
+
+	if filter != nil {
+		if filter.Type == "photo" || filter.Type == "video" {
+			conditions = append(conditions, "media_type = ?")
+			args = append(args, filter.Type)
+		}
+		if filter.DateFrom != "" {
+			conditions = append(conditions, "created_at >= ?")
+			args = append(args, filter.DateFrom)
+		}
+		if filter.DateTo != "" {
+			conditions = append(conditions, "created_at <= ?")
+			args = append(args, filter.DateTo+" 23:59:59")
+		}
+		if filter.Q != "" {
+			like := likePattern(filter.Q)
+			conditions = append(conditions,
+				`(title LIKE ? ESCAPE '\' OR description LIKE ? ESCAPE '\' OR recipe_json LIKE ? ESCAPE '\')`)
+			args = append(args, like, like, like)
+		}
+		if filter.Tag != "" {
+			conditions = append(conditions, `id IN (
+				SELECT pt.post_id FROM post_tags pt
+				JOIN tags t ON pt.tag_id = t.id
+				WHERE t.name = ?)`)
+			args = append(args, filter.Tag)
+		}
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	orderBy := "ORDER BY created_at DESC, id DESC"
+	if filter != nil && filter.Sort == "oldest" {
+		orderBy = "ORDER BY created_at ASC, id ASC"
+	}
+	query += " " + orderBy
+
+	// Pagination is opt-in via Limit > 0 so existing callers (feed, admin
+	// list) keep receiving the full result set.
+	if filter != nil && filter.Limit > 0 {
+		query += " LIMIT ? OFFSET ?"
+		offset := filter.Offset
+		if offset < 0 {
+			offset = 0
+		}
+		args = append(args, filter.Limit, offset)
+	}
+
+	rows, err := DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []Post
+	for rows.Next() {
+		p, err := scanPost(rows)
+		if err != nil {
+			return nil, err
+		}
+		posts = append(posts, *p)
+	}
+	return posts, nil
+}
+
+// CountPosts returns the total number of posts matching the filter's
+// conditions, ignoring pagination. Used for the X-Total-Count header.
+func CountPosts(filter *PostFilter) (int, error) {
+	query := "SELECT COUNT(*) FROM posts"
+	var conditions []string
+	var args []interface{}
+
+	if filter != nil {
+		if filter.Type == "photo" || filter.Type == "video" {
+			conditions = append(conditions, "media_type = ?")
+			args = append(args, filter.Type)
+		}
+		if filter.DateFrom != "" {
+			conditions = append(conditions, "created_at >= ?")
+			args = append(args, filter.DateFrom)
+		}
+		if filter.DateTo != "" {
+			conditions = append(conditions, "created_at <= ?")
+			args = append(args, filter.DateTo+" 23:59:59")
+		}
+		if filter.Q != "" {
+			like := likePattern(filter.Q)
+			conditions = append(conditions,
+				`(title LIKE ? ESCAPE '\' OR description LIKE ? ESCAPE '\' OR recipe_json LIKE ? ESCAPE '\')`)
+			args = append(args, like, like, like)
+		}
+		if filter.Tag != "" {
+			conditions = append(conditions, `id IN (
+				SELECT pt.post_id FROM post_tags pt
+				JOIN tags t ON pt.tag_id = t.id
+				WHERE t.name = ?)`)
+			args = append(args, filter.Tag)
+		}
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var count int
+	err := DB.QueryRow(query, args...).Scan(&count)
+	return count, err
+}
+
+// likePattern escapes SQL LIKE wildcards in user input and wraps it for
+// substring matching.
+func likePattern(q string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return "%" + replacer.Replace(q) + "%"
+}
+
+// postColumns is the canonical post column list shared by all row scans.
+const postColumns = "id, title, description, media_type, filename, thumbnail, locked, processing, created_at, recipe_json"
+
+// scanPost scans one post row (column order per postColumns).
+func scanPost(rows *sql.Rows) (*Post, error) {
+	var p Post
+	var lockedInt, processingInt int
+	var createdAt, recipeJSON string
+	if err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename,
+		&p.Thumbnail, &lockedInt, &processingInt, &createdAt, &recipeJSON); err != nil {
+		return nil, err
+	}
+	p.Locked = lockedInt == 1
+	p.Processing = processingInt == 1
+	p.CreatedAt, _ = parseTime(createdAt)
+	p.Recipe = parseRecipeJSON(recipeJSON)
+	return &p, nil
+}
+
+// scanPostRow is scanPost for single-row queries.
+func scanPostRow(row *sql.Row) (*Post, error) {
+	var p Post
+	var lockedInt, processingInt int
+	var createdAt, recipeJSON string
+	if err := row.Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename,
+		&p.Thumbnail, &lockedInt, &processingInt, &createdAt, &recipeJSON); err != nil {
+		return nil, err
+	}
+	p.Locked = lockedInt == 1
+	p.Processing = processingInt == 1
+	p.CreatedAt, _ = parseTime(createdAt)
+	p.Recipe = parseRecipeJSON(recipeJSON)
+	return &p, nil
+}
+
+func GetPost(id int64) (*Post, error) {
+	row := DB.QueryRow(
+		"SELECT "+postColumns+" FROM posts WHERE id = ?",
+		id,
+	)
+	p, err := scanPostRow(row)
+	if err != nil {
+		return nil, err
+	}
+	tags, _ := GetTagsForPost(id)
+	p.Tags = tags
+	return p, nil
 }
 
 func CreatePost(title, description, mediaType, filename, thumbnail string, locked bool) (*Post, error) {
@@ -636,77 +829,6 @@ func CreatePost(title, description, mediaType, filename, thumbnail string, locke
 
 	id, _ := res.LastInsertId()
 	return GetPost(id)
-}
-
-func GetPosts(filter *PostFilter) ([]Post, error) {
-	query := "SELECT id, title, description, media_type, filename, thumbnail, locked, processing, created_at FROM posts"
-	var conditions []string
-	var args []interface{}
-
-	if filter != nil {
-		if filter.Type == "photo" || filter.Type == "video" {
-			conditions = append(conditions, "media_type = ?")
-			args = append(args, filter.Type)
-		}
-		if filter.DateFrom != "" {
-			conditions = append(conditions, "created_at >= ?")
-			args = append(args, filter.DateFrom)
-		}
-		if filter.DateTo != "" {
-			conditions = append(conditions, "created_at <= ?")
-			args = append(args, filter.DateTo+" 23:59:59")
-		}
-	}
-
-	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
-	}
-
-	orderBy := "ORDER BY created_at DESC, id DESC"
-	if filter != nil && filter.Sort == "oldest" {
-		orderBy = "ORDER BY created_at ASC, id ASC"
-	}
-
-	rows, err := DB.Query(query+" "+orderBy, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var posts []Post
-	for rows.Next() {
-		var p Post
-		var lockedInt int
-		var processingInt int
-		var createdAt string
-		err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename, &p.Thumbnail, &lockedInt, &processingInt, &createdAt)
-		if err != nil {
-			return nil, err
-		}
-		p.Locked = lockedInt == 1
-		p.Processing = processingInt == 1
-		p.CreatedAt, _ = parseTime(createdAt)
-		posts = append(posts, p)
-	}
-	return posts, nil
-}
-
-func GetPost(id int64) (*Post, error) {
-	p := &Post{}
-	var lockedInt int
-	var processingInt int
-	var createdAt string
-	err := DB.QueryRow(
-		"SELECT id, title, description, media_type, filename, thumbnail, locked, processing, created_at FROM posts WHERE id = ?",
-		id,
-	).Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename, &p.Thumbnail, &lockedInt, &processingInt, &createdAt)
-	if err != nil {
-		return nil, err
-	}
-	p.Locked = lockedInt == 1
-	p.Processing = processingInt == 1
-	p.CreatedAt, _ = parseTime(createdAt)
-	return p, nil
 }
 
 func UpdatePostLock(id int64, locked bool) (*Post, error) {
@@ -742,6 +864,9 @@ func UpdatePostProcessing(id int64, filename, thumbnail string) error {
 }
 
 func DeletePost(id int64) error {
+	// Clean up tag links so orphan tags don't linger.
+	DB.Exec("DELETE FROM post_tags WHERE post_id = ?", id)
+	deleteOrphanTags()
 	_, err := DB.Exec("DELETE FROM posts WHERE id = ?", id)
 	return err
 }
@@ -941,7 +1066,8 @@ func ToggleFavourite(userID, postID int64) (bool, error) {
 
 func ListFavourites(userID int64) ([]Post, error) {
 	rows, err := DB.Query(`
-		SELECT p.id, p.title, p.description, p.media_type, p.filename, p.thumbnail, p.locked, p.processing, p.created_at
+		SELECT p.id, p.title, p.description, p.media_type, p.filename, p.thumbnail,
+		       p.locked, p.processing, p.created_at, p.recipe_json
 		FROM posts p JOIN favourites f ON p.id = f.post_id
 		WHERE f.user_id = ? ORDER BY f.created_at DESC`, userID)
 	if err != nil {
@@ -951,16 +1077,11 @@ func ListFavourites(userID int64) ([]Post, error) {
 
 	var posts []Post
 	for rows.Next() {
-		var p Post
-		var lockedInt, processingInt int
-		var createdAt string
-		if err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename, &p.Thumbnail, &lockedInt, &processingInt, &createdAt); err != nil {
+		p, err := scanPost(rows)
+		if err != nil {
 			return nil, err
 		}
-		p.Locked = lockedInt == 1
-		p.Processing = processingInt == 1
-		p.CreatedAt, _ = parseTime(createdAt)
-		posts = append(posts, p)
+		posts = append(posts, *p)
 	}
 	return posts, nil
 }

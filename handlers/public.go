@@ -15,11 +15,14 @@ type PublicAnalyticsResponse struct {
 }
 
 func ListPosts(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
 	filter := &db.PostFilter{
-		Sort:     r.URL.Query().Get("sort"),
-		Type:     r.URL.Query().Get("type"),
-		DateFrom: r.URL.Query().Get("date_from"),
-		DateTo:   r.URL.Query().Get("date_to"),
+		Sort:     query.Get("sort"),
+		Type:     query.Get("type"),
+		DateFrom: query.Get("date_from"),
+		DateTo:   query.Get("date_to"),
+		Q:        query.Get("q"),
+		Tag:      query.Get("tag"),
 	}
 
 	// Validate type param
@@ -27,6 +30,29 @@ func ListPosts(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid type filter: must be 'photo' or 'video'", http.StatusBadRequest)
 		return
 	}
+
+	// Pagination: default 24, max 100, offset >= 0 (clamped, never an error)
+	filter.Limit = 24
+	if v := query.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			filter.Limit = n
+		}
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if v := query.Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			filter.Offset = n
+		}
+	}
+
+	total, err := db.CountPosts(filter)
+	if err != nil {
+		jsonError(w, "failed to count posts", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("X-Total-Count", strconv.Itoa(total))
 
 	posts, err := db.GetPosts(filter)
 	if err != nil {
@@ -70,6 +96,13 @@ func ListPosts(w http.ResponseWriter, r *http.Request) {
 			url := "/uploads/" + p.Filename
 			mediaURL = &url
 		}
+		if !unlocked {
+			// Locked posts never expose ingredient or step content.
+			p.Recipe.Ingredients = []string{}
+			p.Recipe.Steps = []string{}
+		}
+		tags, _ := db.GetTagsForPost(p.ID)
+		p.Tags = tags
 		favourited, _ := db.GetUserFavourited(userID, p.ID)
 		favCount, _ := db.GetFavouriteCount(p.ID)
 		tipCount, _ := db.GetTipCount(p.ID)
@@ -120,6 +153,11 @@ func GetPost(w http.ResponseWriter, r *http.Request) {
 	if !unlocked && userID > 0 {
 		purchased, _ := db.HasUserPurchased(userID, post.ID)
 		unlocked = purchased
+	}
+	if !unlocked {
+		// Locked posts never expose ingredient or step content.
+		post.Recipe.Ingredients = []string{}
+		post.Recipe.Steps = []string{}
 	}
 	favourited, _ := db.GetUserFavourited(userID, post.ID)
 	favCount, _ := db.GetFavouriteCount(post.ID)

@@ -8,6 +8,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍳</text></svg>">
   <link rel="alternate" type="application/rss+xml" title="Red Copper Chef — RSS Feed" href="/feed.xml">
   <link rel="alternate" type="application/feed+json" title="Red Copper Chef — JSON Feed" href="/api/feed?format=json">
+  <!--#meta-->
 </head>
 <body>
 
@@ -61,6 +62,10 @@
 
   <!-- Filter Bar -->
   <div class="filter-bar">
+    <input type="search" class="filter-input" id="filter-q" placeholder="🔍 Search recipes..." style="flex:1;min-width:140px;">
+    <select class="filter-select" id="filter-tag">
+      <option value="">All Tags</option>
+    </select>
     <select class="filter-select" id="filter-sort">
       <option value="newest">Newest First</option>
       <option value="oldest">Oldest First</option>
@@ -89,6 +94,13 @@
       <p>Loading the Chef's latest sizzle...</p>
     </div>
   </main>
+
+  <!-- Pagination -->
+  <div id="pagination-bar" style="display:none;justify-content:center;align-items:center;gap:12px;padding:1rem 0;">
+    <button class="filter-btn" id="btn-page-prev">← Prev</button>
+    <span id="pagination-info" style="color:#aaa;font-size:0.9rem;"></span>
+    <button class="filter-btn" id="btn-page-next">Next →</button>
+  </div>
 
   <!-- Login Modal -->
   <div class="auth-modal-overlay" id="login-modal" style="display:none;">

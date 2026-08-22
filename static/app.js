@@ -384,6 +384,56 @@ async function handleIdealSubmit(e) {
 
 // ── Feed ──
 
+// ── Pagination & discovery state ──
+
+const PAGE_SIZE = 24;
+let pagination = { offset: 0, total: 0 };
+let tagsLoaded = false;
+
+async function loadTags() {
+  if (tagsLoaded) return;
+  try {
+    const res = await fetch(API.tags || '/api/tags');
+    if (!res.ok) return;
+    const tags = await res.json();
+    const select = $('filter-tag');
+    const current = select.value;
+    select.innerHTML = '<option value="">All Tags</option>' + tags.map(tag =>
+      `<option value="${escapeHtml(tag.name)}">${escapeHtml(tag.name)} (${tag.count})</option>`
+    ).join('');
+    select.value = current;
+    tagsLoaded = true;
+  } catch (_) { /* tag filter is optional */ }
+}
+
+function updatePaginationUI() {
+  const bar = $('pagination-bar');
+  const total = pagination.total;
+  const showingAll = posts.length >= total; // single page
+  if (currentTab === 'favourites' || total <= PAGE_SIZE || showingAll) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+  const from = pagination.offset + 1;
+  const to = pagination.offset + posts.length;
+  $('pagination-info').textContent = `${from}–${to} of ${total}`;
+  $('btn-page-prev').disabled = pagination.offset <= 0;
+  $('btn-page-next').disabled = to >= total;
+}
+
+function pagePrev() {
+  pagination.offset = Math.max(0, pagination.offset - PAGE_SIZE);
+  loadContent();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function pageNext() {
+  pagination.offset += PAGE_SIZE;
+  loadContent();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 async function loadContent() {
   const feed = $('feed');
 
@@ -394,30 +444,46 @@ async function loadContent() {
     return;
   }
 
+  loadTags();
+
   const params = new URLSearchParams();
 
   const sort = $('filter-sort').value;
   const type = $('filter-type').value;
   const dateFrom = $('filter-date-from').value;
   const dateTo = $('filter-date-to').value;
+  const q = $('filter-q') ? $('filter-q').value.trim() : '';
+  const tag = $('filter-tag') ? $('filter-tag').value : '';
 
   if (sort && sort !== 'newest') params.set('sort', sort);
   if (type) params.set('type', type);
   if (dateFrom) params.set('date_from', dateFrom);
   if (dateTo) params.set('date_to', dateTo);
+  if (q) params.set('q', q);
+  if (tag) params.set('tag', tag);
 
   try {
     let url;
+    let totalCount = null;
     if (currentTab === 'favourites') {
       url = API.favourites;
     } else {
+      if (pagination.offset > 0) params.set('offset', String(pagination.offset));
       url = API.posts + (params.toString() ? '?' + params.toString() : '');
     }
     const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to load');
     posts = await res.json();
+    if (res.headers.get('X-Total-Count')) {
+      totalCount = parseInt(res.headers.get('X-Total-Count'), 10);
+    }
 
-    $('stat-posts').textContent = posts.length;
+    $('stat-posts').textContent = totalCount !== null ? totalCount : posts.length;
+    if (totalCount !== null) {
+      pagination.total = totalCount;
+    } else {
+      pagination.total = posts.length;
+    }
 
     if (currentTab === 'media') {
       renderMediaView();
@@ -426,6 +492,7 @@ async function loadContent() {
     } else {
       renderPostsView();
     }
+    updatePaginationUI();
   } catch (err) {
     feed.innerHTML = `
       <div class="empty-state">
@@ -524,6 +591,22 @@ function renderPostsView() {
     const heartIcon = post.favourited ? '❤️' : '🤍';
     const heartClass = post.favourited ? 'action-btn active' : 'action-btn';
 
+    // Tag chips
+    let tagsHtml = '';
+    if (post.tags && post.tags.length > 0) {
+      tagsHtml = `
+        <div class="post-tags">
+          ${post.tags.map(tag => `<a class="post-tag" href="/?tag=${encodeURIComponent(tag)}" onclick="filterByTag('${escapeHtml(tag)}');return false;">#${escapeHtml(tag)}</a>`).join('')}
+        </div>
+      `;
+    }
+
+    // Recipe card (only when unlocked — locked posts never carry the data)
+    let recipeHtml = '';
+    if (unlocked && post.recipe && recipeHasContent(post.recipe)) {
+      recipeHtml = renderRecipeCard(post.recipe);
+    }
+
     return `
       <div class="post-card" data-post-id="${post.id}">
         <div class="post-header">
@@ -540,7 +623,9 @@ function renderPostsView() {
           <div class="post-title">${escapeHtml(post.title)}</div>
           ${post.description ? `<div class="post-desc">${escapeHtml(post.description)}</div>` : ''}
         </div>
+        ${tagsHtml}
         ${mediaHtml}
+        ${recipeHtml}
         ${linkedHtml}
         <div class="post-actions">
           <button class="action-btn" onclick="toggleComments(${post.id}, this)">
@@ -577,6 +662,70 @@ function renderPostsView() {
 
   // Load comment counts for all posts
   posts.forEach(post => loadCommentCount(post.id));
+}
+
+// ── Recipe card ──
+
+function recipeHasContent(recipe) {
+  return (recipe.ingredients && recipe.ingredients.length > 0) ||
+         (recipe.steps && recipe.steps.length > 0) ||
+         recipe.servings > 0 || recipe.prep_minutes > 0 || recipe.cook_minutes > 0;
+}
+
+function renderRecipeCard(recipe) {
+  const times = [];
+  if (recipe.prep_minutes > 0) times.push(`⏱️ Prep: ${recipe.prep_minutes} min`);
+  if (recipe.cook_minutes > 0) times.push(`🔥 Cook: ${recipe.cook_minutes} min`);
+  if (recipe.servings > 0) times.push(`🍽️ Servings: ${recipe.servings}`);
+
+  let ingredientsHtml = '';
+  if (recipe.ingredients && recipe.ingredients.length > 0) {
+    ingredientsHtml = `
+      <div class="recipe-section">
+        <h4 class="recipe-heading">🧺 Ingredients</h4>
+        <ul class="recipe-ingredients">
+          ${recipe.ingredients.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  let stepsHtml = '';
+  if (recipe.steps && recipe.steps.length > 0) {
+    stepsHtml = `
+      <div class="recipe-section">
+        <h4 class="recipe-heading">👨‍🍳 Steps</h4>
+        <ol class="recipe-steps">
+          ${recipe.steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}
+        </ol>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="recipe-card">
+      <h3 class="recipe-title">📋 Recipe</h3>
+      ${times.length > 0 ? `<div class="recipe-times">${times.map(t => `<span class="recipe-time">${t}</span>`).join('')}</div>` : ''}
+      ${ingredientsHtml}
+      ${stepsHtml}
+    </div>
+  `;
+}
+
+function filterByTag(tag) {
+  const tagSelect = $('filter-tag');
+  if (tagSelect) {
+    // Ensure the option exists before selecting it
+    if (![...tagSelect.options].some(opt => opt.value === tag)) {
+      const opt = document.createElement('option');
+      opt.value = tag;
+      opt.textContent = '#' + tag;
+      tagSelect.appendChild(opt);
+    }
+    tagSelect.value = tag;
+  }
+  pagination.offset = 0;
+  switchTab('posts');
 }
 
 // ── Shared single-post view ──
@@ -922,6 +1071,7 @@ function renderMediaView() {
 
 function switchTab(tab) {
   currentTab = tab;
+  pagination.offset = 0;
   document.querySelectorAll('.tab').forEach(t => {
     t.classList.toggle('tab-active', t.dataset.tab === tab);
   });
@@ -1131,10 +1281,16 @@ document.addEventListener('DOMContentLoaded', () => {
   $('ideal-form').addEventListener('submit', handleIdealSubmit);
 
   // Filter
-  $('btn-filter-apply').addEventListener('click', loadContent);
-  // Auto-filter on Enter in date fields
-  $('filter-date-from').addEventListener('keydown', e => { if (e.key === 'Enter') loadContent(); });
-  $('filter-date-to').addEventListener('keydown', e => { if (e.key === 'Enter') loadContent(); });
+  $('btn-filter-apply').addEventListener('click', () => { pagination.offset = 0; loadContent(); });
+  // Auto-filter on Enter in date/search fields
+  $('filter-date-from').addEventListener('keydown', e => { if (e.key === 'Enter') { pagination.offset = 0; loadContent(); } });
+  $('filter-date-to').addEventListener('keydown', e => { if (e.key === 'Enter') { pagination.offset = 0; loadContent(); } });
+  $('filter-q').addEventListener('keydown', e => { if (e.key === 'Enter') { pagination.offset = 0; loadContent(); } });
+  $('filter-tag').addEventListener('change', () => { pagination.offset = 0; loadContent(); });
+
+  // Pagination
+  $('btn-page-prev').addEventListener('click', pagePrev);
+  $('btn-page-next').addEventListener('click', pageNext);
 
   // Tab switching
   document.querySelectorAll('.tab').forEach(tab => {

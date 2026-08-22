@@ -86,12 +86,12 @@ type atomLink struct {
 }
 
 type rssItem struct {
-	Title       string      `xml:"title"`
-	Link        string      `xml:"link"`
-	GUID        guid        `xml:"guid"`
-	PubDate     string      `xml:"pubDate,omitempty"`
-	Description string      `xml:"description"`
-	Enclosure   *enclosure  `xml:"enclosure,omitempty"`
+	Title        string        `xml:"title"`
+	Link         string        `xml:"link"`
+	GUID         guid          `xml:"guid"`
+	PubDate      string        `xml:"pubDate,omitempty"`
+	Description  string        `xml:"description"`
+	Enclosure    *enclosure    `xml:"enclosure,omitempty"`
 	MediaContent *mediaContent `xml:"media:content,omitempty"`
 	MediaThumb   *mediaThumb   `xml:"media:thumbnail,omitempty"`
 }
@@ -235,11 +235,11 @@ type jsonFeed struct {
 }
 
 type jsonItem struct {
-	ID          string `json:"id"`
-	URL         string `json:"url"`
-	Title       string `json:"title"`
-	ContentText string `json:"content_text,omitempty"`
-	Image       string `json:"image,omitempty"`
+	ID            string `json:"id"`
+	URL           string `json:"url"`
+	Title         string `json:"title"`
+	ContentText   string `json:"content_text,omitempty"`
+	Image         string `json:"image,omitempty"`
 	DatePublished string `json:"date_published,omitempty"`
 }
 

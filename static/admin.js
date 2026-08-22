@@ -86,6 +86,33 @@ function showDashboard() {
 }
 
 // Upload
+// ── Recipe & tags helpers ──
+
+function linesToList(text) {
+  return text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+}
+
+// collectRecipe(prefix) reads recipe editor fields ("upload-" or "edit-")
+// and returns a RecipeData object (zero fields omitted when empty).
+function collectRecipe(prefix) {
+  const ingredients = linesToList(document.getElementById(prefix + 'ingredients').value);
+  const steps = linesToList(document.getElementById(prefix + 'steps').value);
+  const servings = parseInt(document.getElementById(prefix + 'servings').value, 10) || 0;
+  const prep = parseInt(document.getElementById(prefix + 'prep').value, 10) || 0;
+  const cook = parseInt(document.getElementById(prefix + 'cook').value, 10) || 0;
+  return {
+    ingredients,
+    steps,
+    servings,
+    prep_minutes: prep,
+    cook_minutes: cook,
+  };
+}
+
+function parseTagsInput(text) {
+  return text.split(',').map(s => s.trim()).filter(s => s.length > 0);
+}
+
 function handleUpload(e) {
   e.preventDefault();
   const form = e.target;
@@ -144,6 +171,16 @@ function handleUpload(e) {
   };
 
   xhr.open('POST', API.upload, true);
+
+  // Optional structured metadata
+  const tags = parseTagsInput(document.getElementById('upload-tags').value);
+  if (tags.length > 0) formData.append('tags', tags.join(','));
+  const recipe = collectRecipe('upload-');
+  if (recipe.ingredients.length || recipe.steps.length || recipe.servings ||
+      recipe.prep_minutes || recipe.cook_minutes) {
+    formData.append('recipe', JSON.stringify(recipe));
+  }
+
   xhr.send(formData);
 }
 
@@ -237,6 +274,15 @@ function openEditModal(postId) {
   document.getElementById('edit-title').value = post.title || '';
   document.getElementById('edit-description').value = post.description || '';
 
+  // Recipe + tags editor
+  const recipe = post.recipe || {};
+  document.getElementById('edit-ingredients').value = (recipe.ingredients || []).join('\n');
+  document.getElementById('edit-steps').value = (recipe.steps || []).join('\n');
+  document.getElementById('edit-servings').value = recipe.servings || 0;
+  document.getElementById('edit-prep').value = recipe.prep_minutes || 0;
+  document.getElementById('edit-cook').value = recipe.cook_minutes || 0;
+  document.getElementById('edit-tags').value = (post.tags || []).join(', ');
+
   // Show the current media and reset the replace-media state.
   const src = post.thumbnail || post.filename;
   document.getElementById('edit-media-preview').innerHTML = src
@@ -312,10 +358,13 @@ async function handleEditSubmit(e) {
   if (!title) return;
 
   try {
+    const body = { title, description };
+    body.recipe = collectRecipe('edit-');
+    body.tags = parseTagsInput(document.getElementById('edit-tags').value);
     const res = await fetch(`${API.posts}/${currentEditPostId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, description }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const data = await res.json();

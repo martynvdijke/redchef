@@ -62,10 +62,10 @@ func CreateTip(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":             true,
-		"tip_count":      count,
-		"amount_cents":   req.AmountCents,
-		"total_amount":   totalAmount,
-		"formatted":      fmt.Sprintf("€%d,%02d", req.AmountCents/100, req.AmountCents%100),
+		"ok":           true,
+		"tip_count":    count,
+		"amount_cents": req.AmountCents,
+		"total_amount": totalAmount,
+		"formatted":    fmt.Sprintf("€%d,%02d", req.AmountCents/100, req.AmountCents%100),
 	})
 }

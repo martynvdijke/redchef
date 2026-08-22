@@ -57,6 +57,10 @@ func AdminListPosts(w http.ResponseWriter, r *http.Request) {
 	if posts == nil {
 		posts = []db.Post{}
 	}
+	for i := range posts {
+		tags, _ := db.GetTagsForPost(posts[i].ID)
+		posts[i].Tags = tags
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
 }
@@ -113,6 +117,51 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 		os.Remove(filepath.Join(uploadDir, filename))
 		jsonError(w, "failed to create post", http.StatusInternalServerError)
 		return
+	}
+
+	// Optional recipe metadata: JSON object in the "recipe" form field.
+	if recipeStr := r.FormValue("recipe"); strings.TrimSpace(recipeStr) != "" {
+		var recipe db.RecipeData
+		if err := json.Unmarshal([]byte(recipeStr), &recipe); err != nil {
+			os.Remove(filepath.Join(uploadDir, filename))
+			db.DeletePost(post.ID)
+			jsonError(w, "invalid recipe JSON", http.StatusBadRequest)
+			return
+		}
+		db.NormalizeRecipe(&recipe)
+		if err := db.ValidateRecipeData(&recipe); err != nil {
+			os.Remove(filepath.Join(uploadDir, filename))
+			db.DeletePost(post.ID)
+			jsonError(w, "invalid recipe: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := db.UpdatePostRecipe(post.ID, recipe); err != nil {
+			jsonError(w, "failed to save recipe", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Optional tags: comma-separated names in the "tags" form field.
+	if tagsStr := r.FormValue("tags"); strings.TrimSpace(tagsStr) != "" {
+		names := strings.Split(tagsStr, ",")
+		if len(names) > db.MaxTagsPerPost {
+			os.Remove(filepath.Join(uploadDir, filename))
+			db.DeletePost(post.ID)
+			jsonError(w, fmt.Sprintf("tags: at most %d tags allowed", db.MaxTagsPerPost), http.StatusBadRequest)
+			return
+		}
+		for _, tag := range names {
+			if len(strings.TrimSpace(tag)) > db.MaxTagLength {
+				os.Remove(filepath.Join(uploadDir, filename))
+				db.DeletePost(post.ID)
+				jsonError(w, fmt.Sprintf("tags: each tag must be at most %d characters", db.MaxTagLength), http.StatusBadRequest)
+				return
+			}
+		}
+		if err := db.SetPostTags(post.ID, names); err != nil {
+			jsonError(w, "failed to save tags", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Notify all users about the new post (async, best-effort)
@@ -254,9 +303,11 @@ func removeIfUnreferenced(filename string) {
 }
 
 type UpdatePostRequest struct {
-	Locked      *bool   `json:"locked"`
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
+	Locked      *bool          `json:"locked"`
+	Title       *string        `json:"title"`
+	Description *string        `json:"description"`
+	Recipe      *db.RecipeData `json:"recipe"`
+	Tags        *[]string      `json:"tags"`
 }
 
 func AdminUpdatePost(w http.ResponseWriter, r *http.Request) {
@@ -273,8 +324,9 @@ func AdminUpdatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Locked == nil && req.Title == nil && req.Description == nil {
-		jsonError(w, "at least one field (locked, title, description) is required", http.StatusBadRequest)
+	if req.Locked == nil && req.Title == nil && req.Description == nil &&
+		req.Recipe == nil && req.Tags == nil {
+		jsonError(w, "at least one field (locked, title, description, recipe, tags) is required", http.StatusBadRequest)
 		return
 	}
 
@@ -307,6 +359,35 @@ func AdminUpdatePost(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, err := db.UpdatePostDetails(id, title, description); err != nil {
 			jsonError(w, "failed to update post", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.Recipe != nil {
+		db.NormalizeRecipe(req.Recipe)
+		if err := db.ValidateRecipeData(req.Recipe); err != nil {
+			jsonError(w, "invalid recipe: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := db.UpdatePostRecipe(id, *req.Recipe); err != nil {
+			jsonError(w, "failed to update recipe", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.Tags != nil {
+		if len(*req.Tags) > db.MaxTagsPerPost {
+			jsonError(w, fmt.Sprintf("tags: at most %d tags allowed", db.MaxTagsPerPost), http.StatusBadRequest)
+			return
+		}
+		for _, tag := range *req.Tags {
+			if len(strings.TrimSpace(tag)) > db.MaxTagLength {
+				jsonError(w, fmt.Sprintf("tags: each tag must be at most %d characters", db.MaxTagLength), http.StatusBadRequest)
+				return
+			}
+		}
+		if err := db.SetPostTags(id, *req.Tags); err != nil {
+			jsonError(w, "failed to update tags", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -369,7 +450,7 @@ func AdminListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateUserRequest struct {
-	Paid *bool  `json:"paid"`
+	Paid *bool   `json:"paid"`
 	Role *string `json:"role"`
 }
 
