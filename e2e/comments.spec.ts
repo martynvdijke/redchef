@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startServer, registerAndLogin, type ServerInstance } from './helpers';
+import { startServer, registerAndLogin, createApiToken, type ServerInstance } from './helpers';
 
 let server: ServerInstance;
 
@@ -28,10 +28,14 @@ test('create comment requires authentication', async ({ request }) => {
 test('create comment on nonexistent post returns 404', async ({ request }) => {
   const email = `comment-${Date.now()}@test.com`;
   const { cookies } = await registerAndLogin(request, server.url, email, 'test1234');
+  const token = await createApiToken(request, server.url, cookies);
 
   const res = await request.post(`${server.url}/api/posts/99999/comments`, {
     data: { body: 'Nice post!' },
-    headers: { Cookie: `${cookies[0].name}=${cookies[0].value}` },
+    headers: {
+      Cookie: `${cookies[0].name}=${cookies[0].value}`,
+      Authorization: `Bearer ${token}`,
+    },
   });
   expect(res.status()).toBe(404);
 });

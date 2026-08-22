@@ -14,14 +14,13 @@ export interface ServerInstance {
 }
 
 /**
- * Build the Go binary if it doesn't exist yet.
+ * Build the Go binary. Always rebuilds so the suite never runs against a
+ * stale binary after source changes.
  */
 export function ensureBinary(): void {
-  if (!fs.existsSync(BINARY)) {
-    // Build only the main package (module root) — `./...` matches multiple
-    // packages and would require -o to be a directory.
-    execSync('go build -o ' + BINARY + ' .', { cwd: ROOT, stdio: 'pipe' });
-  }
+  // Build only the main package (module root) — `./...` matches multiple
+  // packages and would require -o to be a directory.
+  execSync('go build -o ' + BINARY + ' .', { cwd: ROOT, stdio: 'pipe' });
 }
 
 /**
@@ -149,4 +148,26 @@ export async function registerAndLogin(
   const parts = cookies.split(';')[0];
   const [name, ...valParts] = parts.split('=');
   return { cookies: [{ name, value: valParts.join('=') }] };
+}
+
+/**
+ * Create an API token for the given session and return the raw secret.
+ * Mutation endpoints (/api/pay/*, comments, favourites, tips) require a
+ * bearer API token in addition to the session cookie.
+ */
+export async function createApiToken(
+  request: APIRequestContext,
+  baseURL: string,
+  cookies: { name: string; value: string }[],
+  name = 'e2e',
+): Promise<string> {
+  const res = await request.post(`${baseURL}/api/tokens`, {
+    data: { name },
+    headers: { Cookie: `${cookies[0].name}=${cookies[0].value}` },
+  });
+  if (res.status() !== 201) {
+    throw new Error(`Token creation failed: ${res.status()} ${await res.text()}`);
+  }
+  const body = await res.json();
+  return body.token as string;
 }

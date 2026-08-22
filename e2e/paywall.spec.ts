@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startServer, registerAndLogin, type ServerInstance } from './helpers';
+import { startServer, registerAndLogin, createApiToken, type ServerInstance } from './helpers';
 
 let server: ServerInstance;
 
@@ -28,10 +28,14 @@ test('unauthenticated pay item returns 401', async ({ request }) => {
 test('pay unlock works for authenticated non-paid user', async ({ request }) => {
   const email = `pay-${Date.now()}@test.com`;
   const { cookies } = await registerAndLogin(request, server.url, email, 'test1234');
+  const token = await createApiToken(request, server.url, cookies);
 
   const res = await request.post(`${server.url}/api/pay/unlock`, {
     data: { bank: 'ING' },
-    headers: { Cookie: `${cookies[0].name}=${cookies[0].value}` },
+    headers: {
+      Cookie: `${cookies[0].name}=${cookies[0].value}`,
+      Authorization: `Bearer ${token}`,
+    },
   });
   expect(res.status()).toBe(200);
   const body = await res.json();
@@ -42,10 +46,14 @@ test('pay unlock works for authenticated non-paid user', async ({ request }) => 
 test('pay item with missing post_id returns 400', async ({ request }) => {
   const email = `payitem-${Date.now()}@test.com`;
   const { cookies } = await registerAndLogin(request, server.url, email, 'test1234');
+  const token = await createApiToken(request, server.url, cookies);
 
   const res = await request.post(`${server.url}/api/pay/item`, {
     data: { bank: 'ING' },
-    headers: { Cookie: `${cookies[0].name}=${cookies[0].value}` },
+    headers: {
+      Cookie: `${cookies[0].name}=${cookies[0].value}`,
+      Authorization: `Bearer ${token}`,
+    },
   });
   expect(res.status()).toBe(400);
 });
