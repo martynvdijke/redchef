@@ -25,6 +25,27 @@ type Post struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	Recipe      RecipeData `json:"recipe"`
 	Tags        []string   `json:"tags,omitempty"`
+	Status      string     `json:"status"`
+	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
+}
+
+// Post lifecycle states.
+const (
+	PostStatusDraft     = "draft"
+	PostStatusPublished = "published"
+)
+
+// publicPostWhere is the lazy-scheduling visibility predicate: only
+// published posts whose schedule (if any) has come due. Applied to every
+// public read; there is no background publisher.
+const publicPostWhere = "status = 'published' AND (scheduled_at IS NULL OR scheduled_at <= datetime('now'))"
+
+// IsVisible reports whether a post is publicly visible right now.
+func (p *Post) IsVisible() bool {
+	if p.Status != PostStatusPublished {
+		return false
+	}
+	return p.ScheduledAt == nil || !p.ScheduledAt.After(time.Now().UTC())
 }
 
 type User struct {
@@ -293,6 +314,8 @@ func migrate() error {
 	migrateAddColumn("email_settings", "gotify_url", "TEXT NOT NULL DEFAULT ''")
 	migrateAddColumn("email_settings", "gotify_token", "TEXT NOT NULL DEFAULT ''")
 	migrateAddColumn("posts", "recipe_json", "TEXT NOT NULL DEFAULT ''")
+	migrateAddColumn("posts", "status", "TEXT NOT NULL DEFAULT 'published'")
+	migrateAddColumn("posts", "scheduled_at", "DATETIME")
 
 	// Seed default email settings row if table is empty
 	var emailCount int
@@ -629,8 +652,12 @@ func DeleteUserSessionsForUser(userID int64) error {
 
 // ── Posts ──
 
-// PostFilter composes the public post list query. Q/Tag/Limit/Offset extend
-// the original sort/type/date filters; pagination is opt-in via Limit > 0.
+// PostFilter composes the post list query. Q/Tag/Limit/Offset extend the
+// original sort/type/date filters; pagination is opt-in via Limit > 0.
+//
+// Visibility: filters default to publicly-visible posts only. Admin callers
+// opt out with IncludeUnpublished, or narrow with Status ("draft" /
+// "published", includes not-yet-due scheduled posts).
 type PostFilter struct {
 	Sort     string
 	Type     string
@@ -640,6 +667,21 @@ type PostFilter struct {
 	Tag      string
 	Limit    int
 	Offset   int
+
+	Status             string
+	IncludeUnpublished bool
+}
+
+// applyVisibility appends the status condition for this filter.
+func (f *PostFilter) applyVisibility(conditions []string, args []interface{}) ([]string, []interface{}) {
+	switch {
+	case f.Status != "":
+		conditions = append(conditions, "status = ?")
+		args = append(args, f.Status)
+	case !f.IncludeUnpublished:
+		conditions = append(conditions, publicPostWhere)
+	}
+	return conditions, args
 }
 
 func GetPosts(filter *PostFilter) ([]Post, error) {
@@ -648,6 +690,7 @@ func GetPosts(filter *PostFilter) ([]Post, error) {
 	var args []interface{}
 
 	if filter != nil {
+		conditions, args = filter.applyVisibility(conditions, args)
 		if filter.Type == "photo" || filter.Type == "video" {
 			conditions = append(conditions, "media_type = ?")
 			args = append(args, filter.Type)
@@ -721,6 +764,7 @@ func CountPosts(filter *PostFilter) (int, error) {
 	var args []interface{}
 
 	if filter != nil {
+		conditions, args = filter.applyVisibility(conditions, args)
 		if filter.Type == "photo" || filter.Type == "video" {
 			conditions = append(conditions, "media_type = ?")
 			args = append(args, filter.Type)
@@ -765,38 +809,44 @@ func likePattern(q string) string {
 }
 
 // postColumns is the canonical post column list shared by all row scans.
-const postColumns = "id, title, description, media_type, filename, thumbnail, locked, processing, created_at, recipe_json"
+const postColumns = "id, title, description, media_type, filename, thumbnail, locked, processing, created_at, recipe_json, status, scheduled_at"
 
-// scanPost scans one post row (column order per postColumns).
-func scanPost(rows *sql.Rows) (*Post, error) {
+// scanPostInto scans post columns (order per postColumns) into p.
+func scanPostInto(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*Post, error) {
 	var p Post
 	var lockedInt, processingInt int
 	var createdAt, recipeJSON string
-	if err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename,
-		&p.Thumbnail, &lockedInt, &processingInt, &createdAt, &recipeJSON); err != nil {
+	var scheduledAt sql.NullString
+	if err := scanner.Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename,
+		&p.Thumbnail, &lockedInt, &processingInt, &createdAt, &recipeJSON,
+		&p.Status, &scheduledAt); err != nil {
 		return nil, err
 	}
 	p.Locked = lockedInt == 1
 	p.Processing = processingInt == 1
 	p.CreatedAt, _ = parseTime(createdAt)
 	p.Recipe = parseRecipeJSON(recipeJSON)
+	if p.Status == "" {
+		p.Status = PostStatusPublished
+	}
+	if scheduledAt.Valid && strings.TrimSpace(scheduledAt.String) != "" {
+		if t, err := parseTime(scheduledAt.String); err == nil {
+			p.ScheduledAt = &t
+		}
+	}
 	return &p, nil
+}
+
+// scanPost scans one post row (column order per postColumns).
+func scanPost(rows *sql.Rows) (*Post, error) {
+	return scanPostInto(rows)
 }
 
 // scanPostRow is scanPost for single-row queries.
 func scanPostRow(row *sql.Row) (*Post, error) {
-	var p Post
-	var lockedInt, processingInt int
-	var createdAt, recipeJSON string
-	if err := row.Scan(&p.ID, &p.Title, &p.Description, &p.MediaType, &p.Filename,
-		&p.Thumbnail, &lockedInt, &processingInt, &createdAt, &recipeJSON); err != nil {
-		return nil, err
-	}
-	p.Locked = lockedInt == 1
-	p.Processing = processingInt == 1
-	p.CreatedAt, _ = parseTime(createdAt)
-	p.Recipe = parseRecipeJSON(recipeJSON)
-	return &p, nil
+	return scanPostInto(row)
 }
 
 func GetPost(id int64) (*Post, error) {
@@ -850,6 +900,22 @@ func UpdatePostDetails(id int64, title, description string) (*Post, error) {
 		return nil, err
 	}
 	return GetPost(id)
+}
+
+// SetPostStatus sets the lifecycle state and optional schedule of a post.
+// scheduledAt nil clears the schedule. Times are stored UTC in SQLite
+// datetime format so the lazy-visibility predicate can compare them with
+// datetime('now').
+func SetPostStatus(postID int64, status string, scheduledAt *time.Time) error {
+	if status != PostStatusDraft && status != PostStatusPublished {
+		return fmt.Errorf("invalid status: %q", status)
+	}
+	var sched interface{}
+	if scheduledAt != nil {
+		sched = scheduledAt.UTC().Format("2006-01-02 15:04:05")
+	}
+	_, err := DB.Exec("UPDATE posts SET status = ?, scheduled_at = ? WHERE id = ?", status, sched, postID)
+	return err
 }
 
 func UpdatePostProcessing(id int64, filename, thumbnail string) error {
@@ -1067,9 +1133,10 @@ func ToggleFavourite(userID, postID int64) (bool, error) {
 func ListFavourites(userID int64) ([]Post, error) {
 	rows, err := DB.Query(`
 		SELECT p.id, p.title, p.description, p.media_type, p.filename, p.thumbnail,
-		       p.locked, p.processing, p.created_at, p.recipe_json
+		       p.locked, p.processing, p.created_at, p.recipe_json, p.status, p.scheduled_at
 		FROM posts p JOIN favourites f ON p.id = f.post_id
-		WHERE f.user_id = ? ORDER BY f.created_at DESC`, userID)
+		WHERE f.user_id = ? AND p.`+publicPostWhere+`
+		ORDER BY f.created_at DESC`, userID)
 	if err != nil {
 		return nil, err
 	}

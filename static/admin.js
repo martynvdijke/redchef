@@ -92,6 +92,16 @@ function linesToList(text) {
   return text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
 }
 
+// toDatetimeLocal converts an ISO timestamp to the datetime-local input
+// format in the browser's local time (empty string when absent).
+function toDatetimeLocal(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // collectRecipe(prefix) reads recipe editor fields ("upload-" or "edit-")
 // and returns a RecipeData object (zero fields omitted when empty).
 function collectRecipe(prefix) {
@@ -172,6 +182,12 @@ function handleUpload(e) {
 
   xhr.open('POST', API.upload, true);
 
+  // Lifecycle: visibility + optional schedule
+  const status = document.getElementById('upload-status').value;
+  if (status) formData.append('status', status);
+  const scheduled = document.getElementById('upload-scheduled').value;
+  if (scheduled) formData.append('scheduled_at', scheduled);
+
   // Optional structured metadata
   const tags = parseTagsInput(document.getElementById('upload-tags').value);
   if (tags.length > 0) formData.append('tags', tags.join(','));
@@ -182,6 +198,24 @@ function handleUpload(e) {
   }
 
   xhr.send(formData);
+}
+
+// ── Lifecycle helpers ──
+
+function postStatusBadge(post) {
+  if (post.status === 'draft') {
+    return ' <span class="type-badge" style="background:#5a4a2a;color:#ffd479;">📝 Draft</span>';
+  }
+  if (post.scheduled_at && new Date(post.scheduled_at) > new Date()) {
+    const when = new Date(post.scheduled_at).toLocaleString();
+    return ` <span class="type-badge" style="background:#1f3a5a;color:#8ec5ff;">⏰ ${when}</span>`;
+  }
+  return '';
+}
+
+function exportBackup() {
+  showToast('⏳ Preparing backup...');
+  window.location.href = '/api/admin/export';
 }
 
 // Load posts
@@ -213,7 +247,10 @@ async function loadPosts() {
           }
           ${post.processing ? '<span style="font-size:0.7rem;color:var(--gold);display:block;">⏳ processing</span>' : ''}
         </td>
-        <td>${escapeHtml(post.title)}</td>
+        <td>
+          ${escapeHtml(post.title)}
+          ${postStatusBadge(post)}
+        </td>
         <td><span class="type-badge type-${post.media_type}">${post.media_type}</span></td>
         <td>
           <span class="lock-status">${post.locked ? '🔒' : '🔓'}</span>
@@ -282,6 +319,8 @@ function openEditModal(postId) {
   document.getElementById('edit-prep').value = recipe.prep_minutes || 0;
   document.getElementById('edit-cook').value = recipe.cook_minutes || 0;
   document.getElementById('edit-tags').value = (post.tags || []).join(', ');
+  document.getElementById('edit-status').value = post.status === 'draft' ? 'draft' : 'published';
+  document.getElementById('edit-scheduled').value = toDatetimeLocal(post.scheduled_at);
 
   // Show the current media and reset the replace-media state.
   const src = post.thumbnail || post.filename;
@@ -361,6 +400,18 @@ async function handleEditSubmit(e) {
     const body = { title, description };
     body.recipe = collectRecipe('edit-');
     body.tags = parseTagsInput(document.getElementById('edit-tags').value);
+
+    // Lifecycle: status + schedule. Empty schedule clears any existing one.
+    const editPost = allPosts.find(p => p.id === currentEditPostId);
+    body.status = document.getElementById('edit-status').value;
+    const schedVal = document.getElementById('edit-scheduled').value;
+    if (schedVal) {
+      // datetime-local is browser-local; convert to UTC RFC3339 for the API.
+      body.scheduled_at = new Date(schedVal).toISOString();
+    } else if (editPost && editPost.scheduled_at) {
+      body.clear_schedule = true;
+    }
+
     const res = await fetch(`${API.posts}/${currentEditPostId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

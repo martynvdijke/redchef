@@ -90,13 +90,14 @@ func GetTagsForPost(postID int64) ([]string, error) {
 	return names, nil
 }
 
-// ListTagsWithCounts returns every tag still linked to at least one post,
-// with its post count, most-used first.
+// ListTagsWithCounts returns every tag still linked to at least one
+// publicly visible post, with its visible-post count, most-used first.
 func ListTagsWithCounts() ([]TagWithCount, error) {
 	rows, err := DB.Query(`
 		SELECT t.name, COUNT(pt.post_id) AS cnt
 		FROM tags t
 		JOIN post_tags pt ON pt.tag_id = t.id
+		JOIN posts p ON pt.post_id = p.id AND ` + publicPostWhere + `
 		GROUP BY t.id
 		ORDER BY cnt DESC, t.name ASC`)
 	if err != nil {

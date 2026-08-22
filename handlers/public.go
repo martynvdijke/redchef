@@ -125,6 +125,18 @@ func ListPosts(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(responses)
 }
 
+// visiblePost fetches a post and enforces public visibility: drafts and
+// not-yet-due scheduled posts read as not-found (404, not 403 — existence
+// is not leaked to non-admins).
+func visiblePost(w http.ResponseWriter, id int64) (*db.Post, bool) {
+	post, err := db.GetPost(id)
+	if err != nil || !post.IsVisible() {
+		jsonError(w, "post not found", http.StatusNotFound)
+		return nil, false
+	}
+	return post, true
+}
+
 func GetPost(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -133,9 +145,8 @@ func GetPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	post, err := db.GetPost(id)
-	if err != nil {
-		jsonError(w, "post not found", http.StatusNotFound)
+	post, ok := visiblePost(w, id)
+	if !ok {
 		return
 	}
 

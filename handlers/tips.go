@@ -36,10 +36,9 @@ func CreateTip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify post exists
-	post, err := db.GetPost(postID)
-	if err != nil {
-		jsonError(w, "post not found", http.StatusNotFound)
+	// Verify post exists and is publicly visible (drafts 404)
+	post, ok := visiblePost(w, postID)
+	if !ok {
 		return
 	}
 

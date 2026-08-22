@@ -49,7 +49,16 @@ func init() {
 // ── Posts ──
 
 func AdminListPosts(w http.ResponseWriter, r *http.Request) {
-	posts, err := db.GetPosts(nil)
+	// Admins see everything; optional ?status=draft|published narrows.
+	filter := &db.PostFilter{IncludeUnpublished: true}
+	if status := r.URL.Query().Get("status"); status != "" {
+		if status != db.PostStatusDraft && status != db.PostStatusPublished {
+			jsonError(w, "invalid status filter: must be 'draft' or 'published'", http.StatusBadRequest)
+			return
+		}
+		filter.Status = status
+	}
+	posts, err := db.GetPosts(filter)
 	if err != nil {
 		jsonError(w, "failed to list posts", http.StatusInternalServerError)
 		return
@@ -162,6 +171,30 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, "failed to save tags", http.StatusInternalServerError)
 			return
 		}
+	}
+
+	// Optional lifecycle: status (draft|published) and scheduled_at
+	// (RFC3339 or datetime-local). Defaults to published immediately.
+	status := strings.TrimSpace(r.FormValue("status"))
+	if status == "" {
+		status = db.PostStatusPublished
+	}
+	var scheduledAt *time.Time
+	if schedStr := strings.TrimSpace(r.FormValue("scheduled_at")); schedStr != "" {
+		t, err := parseScheduleTime(schedStr)
+		if err != nil {
+			os.Remove(filepath.Join(uploadDir, filename))
+			db.DeletePost(post.ID)
+			jsonError(w, "invalid scheduled_at: must be RFC3339 or YYYY-MM-DDTHH:MM", http.StatusBadRequest)
+			return
+		}
+		scheduledAt = &t
+	}
+	if err := db.SetPostStatus(post.ID, status, scheduledAt); err != nil {
+		os.Remove(filepath.Join(uploadDir, filename))
+		db.DeletePost(post.ID)
+		jsonError(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	// Notify all users about the new post (async, best-effort)
@@ -308,6 +341,29 @@ type UpdatePostRequest struct {
 	Description *string        `json:"description"`
 	Recipe      *db.RecipeData `json:"recipe"`
 	Tags        *[]string      `json:"tags"`
+	Status      *string        `json:"status"`
+	// ScheduledAt accepts RFC3339 or datetime-local ("2006-01-02T15:04").
+	ScheduledAt *string `json:"scheduled_at"`
+	// ClearSchedule removes the schedule (publishes a scheduled post now,
+	// keeping its status).
+	ClearSchedule bool `json:"clear_schedule"`
+}
+
+// parseScheduleTime normalizes client-supplied schedule times to UTC.
+func parseScheduleTime(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+	}
+	for _, f := range formats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("cannot parse schedule time: %q", s)
 }
 
 func AdminUpdatePost(w http.ResponseWriter, r *http.Request) {
@@ -325,8 +381,9 @@ func AdminUpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Locked == nil && req.Title == nil && req.Description == nil &&
-		req.Recipe == nil && req.Tags == nil {
-		jsonError(w, "at least one field (locked, title, description, recipe, tags) is required", http.StatusBadRequest)
+		req.Recipe == nil && req.Tags == nil && req.Status == nil &&
+		req.ScheduledAt == nil && !req.ClearSchedule {
+		jsonError(w, "at least one field (locked, title, description, recipe, tags, status, scheduled_at) is required", http.StatusBadRequest)
 		return
 	}
 
@@ -359,6 +416,38 @@ func AdminUpdatePost(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, err := db.UpdatePostDetails(id, title, description); err != nil {
 			jsonError(w, "failed to update post", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.Status != nil || req.ScheduledAt != nil || req.ClearSchedule {
+		post, _ := db.GetPost(id)
+		status := post.Status
+		if req.Status != nil {
+			status = strings.TrimSpace(*req.Status)
+			if status == "" {
+				status = db.PostStatusPublished
+			}
+			if status != db.PostStatusDraft && status != db.PostStatusPublished {
+				jsonError(w, "status must be 'draft' or 'published'", http.StatusBadRequest)
+				return
+			}
+		}
+		var scheduledAt *time.Time
+		if req.ClearSchedule {
+			scheduledAt = nil
+		} else if req.ScheduledAt != nil && strings.TrimSpace(*req.ScheduledAt) != "" {
+			t, err := parseScheduleTime(*req.ScheduledAt)
+			if err != nil {
+				jsonError(w, "invalid scheduled_at: must be RFC3339 or YYYY-MM-DDTHH:MM", http.StatusBadRequest)
+				return
+			}
+			scheduledAt = &t
+		} else {
+			scheduledAt = post.ScheduledAt
+		}
+		if err := db.SetPostStatus(id, status, scheduledAt); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}

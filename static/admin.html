@@ -434,6 +434,12 @@
       </div>
     </div>
 
+    <!-- Backup -->
+    <div class="upload-section" style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">💾 Backup</h2>
+      <button type="button" class="btn-primary" id="btn-export" onclick="exportBackup()">⬇️ Export backup (zip)</button>
+    </div>
+
     <!-- Upload Form -->
     <div class="upload-section">
       <h2>📤 Upload New Content</h2>
@@ -446,6 +452,17 @@
           <div class="full form-group">
             <label>Description</label>
             <textarea name="description" rows="2" placeholder="Describe this culinary triumph..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Visibility</label>
+            <select id="upload-status">
+              <option value="published">Publish now</option>
+              <option value="draft">Save as draft</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Schedule (optional, browser-local time)</label>
+            <input type="datetime-local" id="upload-scheduled">
           </div>
           <div class="form-group">
             <label>Tags <small>(comma-separated)</small></label>
@@ -675,6 +692,20 @@
           <label>Tags <small>(comma-separated)</small></label>
           <input type="text" id="edit-tags" placeholder="e.g. Sauces, Quick">
         </div>
+        <div style="display:flex;gap:8px;">
+          <div class="form-group" style="flex:1;">
+            <label>Status</label>
+            <select id="edit-status">
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:2;">
+            <label>Schedule (browser-local time)</label>
+            <input type="datetime-local" id="edit-scheduled">
+          </div>
+        </div>
+        <p class="auth-subtitle" style="font-size:12px;margin-top:-4px;">Clear the schedule field to publish immediately / remove the schedule.</p>
         <div class="form-group">
           <label>Recipe — Ingredients <small>(one per line)</small></label>
           <textarea id="edit-ingredients" rows="3"></textarea>

@@ -57,9 +57,8 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify post exists
-	if _, err := db.GetPost(postID); err != nil {
-		jsonError(w, "post not found", http.StatusNotFound)
+	// Verify post exists and is publicly visible (drafts 404)
+	if _, ok := visiblePost(w, postID); !ok {
 		return
 	}
 
