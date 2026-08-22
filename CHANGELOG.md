@@ -1,3 +1,17 @@
+# [1.18.0](https://github.com/martynvdijke/redchef/compare/v1.17.0...v1.18.0) (2026-08-22)
+
+
+### Bug Fixes
+
+* **e2e:** create API tokens for mutation endpoints and always rebuild test binary ([fe82ca4](https://github.com/martynvdijke/redchef/commit/fe82ca4ccd1ca12f8bdff010120fcfa974ec1523))
+
+
+### Features
+
+* **api:** require bearer API tokens for mutations ([3ad7e9d](https://github.com/martynvdijke/redchef/commit/3ad7e9d5b5f4e0c0d4d6949c09cec3c702a3106e))
+* **posts:** drafts, scheduled publishing and one-click backup ([75278ff](https://github.com/martynvdijke/redchef/commit/75278ff99a4e41e3468d5843425836cf6df78bc5))
+* **recipes:** recipe metadata, tags, search and pagination ([bf1e75e](https://github.com/martynvdijke/redchef/commit/bf1e75ec86112e239fd96f914d95f1c7fa09169f))
+
 # [1.17.0](https://github.com/martynvdijke/redchef/compare/v1.16.1...v1.17.0) (2026-08-20)
 
 
