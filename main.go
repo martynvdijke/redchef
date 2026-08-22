@@ -45,9 +45,11 @@ func main() {
 	mux.HandleFunc("POST /api/auth/reset", handlers.ResetPassword)
 	mux.Handle("GET /api/auth/me", handlers.AuthMiddleware(http.HandlerFunc(handlers.Me)))
 
-	// Paywall API
-	mux.Handle("POST /api/pay/unlock", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.PayUnlock))))
-	mux.Handle("POST /api/pay/item", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.PayItem))))
+	// Paywall API (mutations require session + bearer API token)
+	payMux := http.NewServeMux()
+	payMux.HandleFunc("POST /api/pay/unlock", handlers.PayUnlock)
+	payMux.HandleFunc("POST /api/pay/item", handlers.PayItem)
+	mux.Handle("POST /api/pay/", handlers.AuthMiddleware(handlers.RequireAuth(handlers.RequireMutationToken(payMux))))
 
 	// DAS / RSS feed (public, no auth required) — title, message and image per post
 	mux.HandleFunc("GET /feed.xml", handlers.Feed)
@@ -65,12 +67,21 @@ func main() {
 	publicMux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
 	mux.Handle("GET /api/", handlers.AuthMiddleware(publicMux))
 
-	// Authenticated actions (require session)
+	// Authenticated actions (require session + bearer API token)
 	authMux := http.NewServeMux()
 	authMux.HandleFunc("POST /api/posts/{id}/comments", handlers.CreateComment)
 	authMux.HandleFunc("POST /api/posts/{id}/favourite", handlers.ToggleFavourite)
 	authMux.HandleFunc("POST /api/posts/{id}/tip", handlers.CreateTip)
-	mux.Handle("POST /api/posts/", handlers.AuthMiddleware(handlers.RequireAuth(authMux)))
+	mux.Handle("POST /api/posts/", handlers.AuthMiddleware(handlers.RequireAuth(handlers.RequireMutationToken(authMux))))
+
+	// API token management (session only — creating a token must not require one)
+	tokenGuard := func(h http.HandlerFunc) http.Handler {
+		return handlers.AuthMiddleware(handlers.RequireAuth(h))
+	}
+	mux.Handle("GET /api/tokens", tokenGuard(handlers.ListTokens))
+	mux.Handle("POST /api/tokens", tokenGuard(handlers.CreateToken))
+	mux.Handle("DELETE /api/tokens/{id}", tokenGuard(handlers.RevokeToken))
+	mux.Handle("POST /api/tokens/{id}/rotate", tokenGuard(handlers.RotateToken))
 
 	// Admin API (authenticated as admin)
 	adminMux := http.NewServeMux()

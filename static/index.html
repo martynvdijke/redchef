@@ -24,6 +24,7 @@
         <span class="nav-user-email" id="nav-email"></span>
         <span class="nav-user-badge nav-user-badge-paid" id="nav-paid-badge" style="display:none;">👑 Member</span>
         <a href="/admin.html" class="nav-user-badge nav-user-badge-admin" id="nav-admin-link" style="display:none;">Admin</a>
+        <button class="nav-auth-btn nav-auth-btn-outline" id="btn-tokens">API Tokens</button>
         <button class="nav-auth-btn nav-auth-btn-outline" id="btn-logout">Sign Out</button>
       </div>
     </div>
@@ -215,6 +216,28 @@
         </button>
         <p class="modal-note" id="modal-note">🔒 Parodie — er wordt niks afgeschreven</p>
       </form>
+    </div>
+  </div>
+
+  <!-- API Tokens Modal -->
+  <div class="auth-modal-overlay" id="tokens-modal" style="display:none;">
+    <div class="auth-modal">
+      <button class="modal-close" id="tokens-modal-close">✕</button>
+      <h2>🔑 API Tokens</h2>
+      <p class="auth-subtitle">Tokens authorize scripts to act as you. Required for comments, favourites, tips and payments.</p>
+      <form id="token-create-form">
+        <div class="form-group">
+          <label>New token name</label>
+          <input type="text" id="token-name" placeholder="my-script" maxlength="100" required>
+        </div>
+        <button type="submit" class="btn-primary">Create Token</button>
+      </form>
+      <div class="auth-error" id="token-secret-box" style="display:none;">
+        <strong>Copy your token now — it won't be shown again:</strong>
+        <code id="token-secret-value" style="display:block;word-break:break-all;margin-top:6px;"></code>
+        <button type="button" class="btn-primary" id="token-copy-btn" style="margin-top:8px;">Copy</button>
+      </div>
+      <div id="token-list" style="margin-top:16px;"></div>
     </div>
   </div>
 

@@ -21,6 +21,33 @@ let currentTab = 'posts';
 // ── DOM refs ──
 const $ = id => document.getElementById(id);
 
+// ── API token (second credential for mutations) ──
+const API_TOKEN_KEY = 'redchef_api_token';
+
+function getStoredApiToken() {
+  return localStorage.getItem(API_TOKEN_KEY) || '';
+}
+
+function authedFetch(url, opts = {}) {
+  const token = getStoredApiToken();
+  const headers = Object.assign({}, opts.headers || {});
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return fetch(url, Object.assign({}, opts, { headers })).catch(err => {
+    throw err;
+  }).then(async res => {
+    if (res.status === 401) {
+      try {
+        const data = await res.clone().json();
+        if (data.error && data.error.includes('API token')) {
+          localStorage.removeItem(API_TOKEN_KEY);
+          showToast('🔑 This action needs a valid API token — create one under "API Tokens".', true);
+        }
+      } catch (_) {}
+    }
+    return res;
+  });
+}
+
 // ── Escape ──
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -332,7 +359,7 @@ async function handleIdealSubmit(e) {
   $('modal-btn-text').textContent = `Verwerken via ${bank}...`;
 
   try {
-    const res = await fetch(isItem ? API.payItem : API.unlock, {
+    const res = await authedFetch(isItem ? API.payItem : API.unlock, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(isItem ? { bank, post_id: purchasePostId } : { bank }),
@@ -589,7 +616,7 @@ async function loadSinglePost(postId) {
 async function handleFavourite(postId, btn) {
   if (!currentUser) { openLoginModal(); return; }
   try {
-    const res = await fetch('/api/posts/' + postId + '/favourite', { method: 'POST' });
+    const res = await authedFetch('/api/posts/' + postId + '/favourite', { method: 'POST' });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
     // Toggle heart icon
@@ -670,7 +697,7 @@ function openTipModal(postId) {
 
 async function sendTip(postId, amountCents) {
   try {
-    const res = await fetch('/api/posts/' + postId + '/tip', {
+    const res = await authedFetch('/api/posts/' + postId + '/tip', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount_cents: amountCents }),
@@ -830,7 +857,7 @@ async function submitCommentBody(postId, body, parentId) {
   try {
     const payload = { body };
     if (parentId) payload.parent_id = parentId;
-    const res = await fetch('/api/posts/' + postId + '/comments', {
+    const res = await authedFetch('/api/posts/' + postId + '/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -945,6 +972,86 @@ async function initUmamiTracking() {
   } catch (_) {}
 }
 
+// ── API Tokens UI ──
+
+function openTokensModal() {
+  $('tokens-modal').style.display = 'flex';
+  $('token-secret-box').style.display = 'none';
+  loadTokens();
+}
+
+function closeTokensModal() {
+  $('tokens-modal').style.display = 'none';
+}
+
+async function loadTokens() {
+  const listEl = $('token-list');
+  try {
+    const res = await fetch('/api/tokens');
+    if (!res.ok) { listEl.innerHTML = '<p class="auth-subtitle">Could not load tokens.</p>'; return; }
+    const tokens = await res.json();
+    if (!tokens.length) {
+      listEl.innerHTML = '<p class="auth-subtitle">No tokens yet.</p>';
+      return;
+    }
+    listEl.innerHTML = tokens.map(t => {
+      const state = t.revoked_at ? '❌ revoked' : (t.expires_at && new Date(t.expires_at) < new Date() ? '⏰ expired' : '✅ active');
+      const lastUsed = t.last_used_at ? new Date(t.last_used_at).toLocaleString() : 'never';
+      return `<div class="form-group" style="border:1px solid #ddd;border-radius:8px;padding:10px;">
+        <strong>${escapeHtml(t.name)}</strong> <small>${state}</small><br>
+        <small>created ${new Date(t.created_at).toLocaleString()} · last used ${lastUsed}</small><br>
+        ${!t.revoked_at ? `<button type="button" class="auth-switch-link" data-token-action="rotate" data-id="${t.id}">Rotate</button>
+        <button type="button" class="auth-switch-link" data-token-action="revoke" data-id="${t.id}">Revoke</button>` : ''}
+      </div>`;
+    }).join('');
+    listEl.querySelectorAll('[data-token-action]').forEach(btn => {
+      btn.addEventListener('click', () => handleTokenAction(btn.dataset.tokenAction, btn.dataset.id));
+    });
+  } catch (_) {
+    listEl.innerHTML = '<p class="auth-subtitle">Could not load tokens.</p>';
+  }
+}
+
+function revealTokenSecret(secret) {
+  localStorage.setItem(API_TOKEN_KEY, secret);
+  $('token-secret-box').style.display = 'block';
+  $('token-secret-value').textContent = secret;
+}
+
+async function handleTokenCreate(e) {
+  e.preventDefault();
+  const name = $('token-name').value.trim();
+  if (!name) return;
+  try {
+    const res = await fetch('/api/tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast('❌ ' + (data.error || 'Failed to create token'), true); return; }
+    $('token-name').value = '';
+    revealTokenSecret(data.token);
+    loadTokens();
+  } catch (_) {
+    showToast('❌ Failed to create token', true);
+  }
+}
+
+async function handleTokenAction(action, id) {
+  const url = action === 'rotate' ? `/api/tokens/${id}/rotate` : `/api/tokens/${id}`;
+  try {
+    const res = await fetch(url, { method: action === 'rotate' ? 'POST' : 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { showToast('❌ ' + (data.error || 'Failed'), true); return; }
+    if (action === 'rotate') revealTokenSecret(data.token);
+    else showToast('🔑 Token revoked');
+    loadTokens();
+  } catch (_) {
+    showToast('❌ Failed', true);
+  }
+}
+
 // ── Init ──
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1003,6 +1110,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Paywall
   $('btn-unlock').addEventListener('click', handleUnlock);
+
+  // API tokens
+  $('btn-tokens').addEventListener('click', openTokensModal);
+  $('tokens-modal-close').addEventListener('click', closeTokensModal);
+  $('tokens-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeTokensModal();
+  });
+  $('token-create-form').addEventListener('submit', handleTokenCreate);
+  $('token-copy-btn').addEventListener('click', () => {
+    navigator.clipboard.writeText($('token-secret-value').textContent)
+      .then(() => showToast('🔑 Token copied'));
+  });
 
   // iDEAL modal
   $('ideal-modal-close').addEventListener('click', closeIdealModal);

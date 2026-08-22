@@ -255,6 +255,18 @@ func migrate() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		);
+
+		CREATE TABLE IF NOT EXISTS api_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			name TEXT NOT NULL DEFAULT '',
+			token_hash TEXT UNIQUE NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			last_used_at DATETIME,
+			expires_at DATETIME,
+			revoked_at DATETIME,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		);
 	`)
 
 	// Migrate existing tables: add columns that may be missing on upgraded DBs
