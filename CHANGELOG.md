@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/martynvdijke/redchef/compare/v1.18.0...v1.19.0) (2026-08-23)
+
+
+### Features
+
+* **feed:** photo lightbox zoom for unlocked posts and media grid ([c0410c9](https://github.com/martynvdijke/redchef/commit/c0410c913c86b83b072a004c897e4c3fae74801a))
+
 # [1.18.0](https://github.com/martynvdijke/redchef/compare/v1.17.0...v1.18.0) (2026-08-22)
 
 
