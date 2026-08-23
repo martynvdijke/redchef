@@ -1554,3 +1554,44 @@ body {
 .recipe-steps li {
   margin-bottom: 6px;
 }
+
+/* ========== LIGHTBOX ========== */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.lightbox img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  padding: 8px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lightbox-close:hover {
+  color: #ccc;
+}
+
+/* Zoomable photos */
+.post-media > img,
+.media-grid-item > img {
+  cursor: zoom-in;
+}

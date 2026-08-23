@@ -569,6 +569,7 @@ function renderPostsView() {
       mediaHtml = `
         <div class="post-media">
           <img src="${mediaUrl}" alt="${escapeHtml(post.title)}" loading="lazy"
+               onclick="openLightbox(this.src, this.alt)"
                onerror="this.style.display='none';this.parentElement.style.background='#222'">
         </div>
       `;
@@ -1048,7 +1049,8 @@ function renderMediaView() {
     } else if (post.media_type === 'video') {
       mediaEl = `<video src="${mediaUrl}" preload="metadata"></video>`;
     } else {
-      mediaEl = `<img src="${mediaUrl}" alt="${escapeHtml(post.title)}" loading="lazy">`;
+      const zoom = unlocked ? ` onclick="openLightbox(this.src, this.alt)"` : '';
+      mediaEl = `<img src="${mediaUrl}" alt="${escapeHtml(post.title)}" loading="lazy"${zoom}>`;
     }
 
     if (!unlocked && !post.processing) {
@@ -1300,3 +1302,42 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load
   checkAuth().then(loadContent);
 });
+
+// ── Lightbox ──
+
+let lightboxEl = null;
+
+function ensureLightbox() {
+  if (lightboxEl) return lightboxEl;
+  lightboxEl = document.createElement('div');
+  lightboxEl.id = 'lightbox';
+  lightboxEl.className = 'lightbox';
+  lightboxEl.innerHTML = `
+    <button class="lightbox-close" aria-label="Sluiten">✕</button>
+    <img src="" alt="">
+  `;
+  lightboxEl.addEventListener('click', e => {
+    if (e.target === lightboxEl) closeLightbox();
+  });
+  lightboxEl.querySelector('.lightbox-close').addEventListener('click', closeLightbox);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && lightboxEl.style.display === 'flex') closeLightbox();
+  });
+  document.body.appendChild(lightboxEl);
+  return lightboxEl;
+}
+
+function openLightbox(src, alt) {
+  const el = ensureLightbox();
+  const img = el.querySelector('img');
+  img.src = src;
+  img.alt = alt || '';
+  el.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  if (!lightboxEl) return;
+  lightboxEl.style.display = 'none';
+  document.body.style.overflow = '';
+}
