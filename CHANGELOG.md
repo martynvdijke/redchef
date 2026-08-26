@@ -1,3 +1,10 @@
+# [1.20.0](https://github.com/martynvdijke/redchef/compare/v1.19.1...v1.20.0) (2026-08-26)
+
+
+### Features
+
+* **auth:** remove API token requirement for in-app submissions, tokens are public-API-only ([a49061f](https://github.com/martynvdijke/redchef/commit/a49061fb8b675c3a5f57ab86f897ccfe4ff7f7f7))
+
 ## [1.19.1](https://github.com/martynvdijke/redchef/compare/v1.19.0...v1.19.1) (2026-08-24)
 
 # [1.19.0](https://github.com/martynvdijke/redchef/compare/v1.18.0...v1.19.0) (2026-08-23)
