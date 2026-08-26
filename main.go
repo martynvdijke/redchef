@@ -46,11 +46,11 @@ func main() {
 	mux.HandleFunc("POST /api/auth/reset", handlers.ResetPassword)
 	mux.Handle("GET /api/auth/me", handlers.AuthMiddleware(http.HandlerFunc(handlers.Me)))
 
-	// Paywall API (mutations require session + bearer API token)
+	// Paywall API (session only — API tokens are for the public API, not in-app actions)
 	payMux := http.NewServeMux()
 	payMux.HandleFunc("POST /api/pay/unlock", handlers.PayUnlock)
 	payMux.HandleFunc("POST /api/pay/item", handlers.PayItem)
-	mux.Handle("POST /api/pay/", handlers.AuthMiddleware(handlers.RequireAuth(handlers.RequireMutationToken(payMux))))
+	mux.Handle("POST /api/pay/", handlers.AuthMiddleware(handlers.RequireAuth(payMux)))
 
 	// DAS / RSS feed (public, no auth required) — title, message and image per post
 	mux.HandleFunc("GET /feed.xml", handlers.Feed)
@@ -69,12 +69,12 @@ func main() {
 	publicMux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
 	mux.Handle("GET /api/", handlers.AuthMiddleware(publicMux))
 
-	// Authenticated actions (require session + bearer API token)
+	// Authenticated actions (session only — API tokens are for programmatic public API use)
 	authMux := http.NewServeMux()
 	authMux.HandleFunc("POST /api/posts/{id}/comments", handlers.CreateComment)
 	authMux.HandleFunc("POST /api/posts/{id}/favourite", handlers.ToggleFavourite)
 	authMux.HandleFunc("POST /api/posts/{id}/tip", handlers.CreateTip)
-	mux.Handle("POST /api/posts/", handlers.AuthMiddleware(handlers.RequireAuth(handlers.RequireMutationToken(authMux))))
+	mux.Handle("POST /api/posts/", handlers.AuthMiddleware(handlers.RequireAuth(authMux)))
 
 	// API token management (session only — creating a token must not require one)
 	tokenGuard := func(h http.HandlerFunc) http.Handler {

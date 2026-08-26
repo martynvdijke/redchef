@@ -21,31 +21,20 @@ let currentTab = 'posts';
 // ── DOM refs ──
 const $ = id => document.getElementById(id);
 
-// ── API token (second credential for mutations) ──
+// ── API token (for public API only — in-app actions use session cookie) ──
 const API_TOKEN_KEY = 'redchef_api_token';
 
 function getStoredApiToken() {
   return localStorage.getItem(API_TOKEN_KEY) || '';
 }
 
+// Kept for external/public API callers that want to attach a token.
+// In-app mutations (comments, favourites, tips, pay) use plain fetch — no token needed.
 function authedFetch(url, opts = {}) {
   const token = getStoredApiToken();
   const headers = Object.assign({}, opts.headers || {});
   if (token) headers['Authorization'] = 'Bearer ' + token;
-  return fetch(url, Object.assign({}, opts, { headers })).catch(err => {
-    throw err;
-  }).then(async res => {
-    if (res.status === 401) {
-      try {
-        const data = await res.clone().json();
-        if (data.error && data.error.includes('API token')) {
-          localStorage.removeItem(API_TOKEN_KEY);
-          showToast('🔑 This action needs a valid API token — create one under "API Tokens".', true);
-        }
-      } catch (_) {}
-    }
-    return res;
-  });
+  return fetch(url, Object.assign({}, opts, { headers }));
 }
 
 // ── Escape ──
@@ -359,7 +348,7 @@ async function handleIdealSubmit(e) {
   $('modal-btn-text').textContent = `Verwerken via ${bank}...`;
 
   try {
-    const res = await authedFetch(isItem ? API.payItem : API.unlock, {
+    const res = await fetch(isItem ? API.payItem : API.unlock, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(isItem ? { bank, post_id: purchasePostId } : { bank }),
@@ -766,7 +755,7 @@ async function loadSinglePost(postId) {
 async function handleFavourite(postId, btn) {
   if (!currentUser) { openLoginModal(); return; }
   try {
-    const res = await authedFetch('/api/posts/' + postId + '/favourite', { method: 'POST' });
+    const res = await fetch('/api/posts/' + postId + '/favourite', { method: 'POST' });
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
     // Toggle heart icon
@@ -847,7 +836,7 @@ function openTipModal(postId) {
 
 async function sendTip(postId, amountCents) {
   try {
-    const res = await authedFetch('/api/posts/' + postId + '/tip', {
+    const res = await fetch('/api/posts/' + postId + '/tip', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount_cents: amountCents }),
@@ -1007,7 +996,7 @@ async function submitCommentBody(postId, body, parentId) {
   try {
     const payload = { body };
     if (parentId) payload.parent_id = parentId;
-    const res = await authedFetch('/api/posts/' + postId + '/comments', {
+    const res = await fetch('/api/posts/' + postId + '/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1124,17 +1113,32 @@ async function initUmamiTracking() {
   } catch (_) {}
 }
 
-// ── API Tokens UI ──
+// ── Profile + API Tokens (public API only) ──
 
-function openTokensModal() {
-  $('tokens-modal').style.display = 'flex';
+function openProfileModal() {
+  if (!currentUser) { openLoginModal(); return; }
+  $('profile-email').textContent = currentUser.email || '';
+  const roleBadge = $('profile-role-badge');
+  if (currentUser.role === 'admin') {
+    roleBadge.textContent = 'Admin';
+    roleBadge.style.display = 'inline-flex';
+  } else {
+    roleBadge.style.display = 'none';
+  }
+  const paidBadge = $('profile-paid-badge');
+  paidBadge.style.display = (currentUser.paid || currentUser.role === 'admin') ? 'inline-flex' : 'none';
+  $('profile-modal').style.display = 'flex';
   $('token-secret-box').style.display = 'none';
   loadTokens();
 }
 
-function closeTokensModal() {
-  $('tokens-modal').style.display = 'none';
+function closeProfileModal() {
+  $('profile-modal').style.display = 'none';
 }
+
+// Backward-compat aliases (old id may be bookmarked)
+function openTokensModal() { openProfileModal(); }
+function closeTokensModal() { closeProfileModal(); }
 
 async function loadTokens() {
   const listEl = $('token-list');
@@ -1263,11 +1267,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Paywall
   $('btn-unlock').addEventListener('click', handleUnlock);
 
-  // API tokens
-  $('btn-tokens').addEventListener('click', openTokensModal);
-  $('tokens-modal-close').addEventListener('click', closeTokensModal);
-  $('tokens-modal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeTokensModal();
+  // Profile (includes API tokens for public API)
+  $('btn-profile').addEventListener('click', openProfileModal);
+  $('profile-modal-close').addEventListener('click', closeProfileModal);
+  $('profile-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeProfileModal();
   });
   $('token-create-form').addEventListener('submit', handleTokenCreate);
   $('token-copy-btn').addEventListener('click', () => {
