@@ -1,3 +1,13 @@
+## [1.20.1](https://github.com/martynvdijke/redchef/compare/v1.20.0...v1.20.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* **ci:** correct actionlint pin ([581329a](https://github.com/martynvdijke/redchef/commit/581329aaef2edeb98a6432f3fa85de9211713bac))
+* **ci:** make pinact check non-blocking ([488e85c](https://github.com/martynvdijke/redchef/commit/488e85c3e5d62de257895a73fc19f47c02f2e458))
+* **ci:** remove unsupported --diff flag from pinact ([8f2e976](https://github.com/martynvdijke/redchef/commit/8f2e976cef37b62e54cc484598331d82d78a49c1))
+* **ci:** update actionlint to v1.7.12 (v1 tag removed upstream) ([bfe67a7](https://github.com/martynvdijke/redchef/commit/bfe67a7be58e0a0e81daf74977f6cc3cb5350bad))
+
 # [1.20.0](https://github.com/martynvdijke/redchef/compare/v1.19.1...v1.20.0) (2026-08-26)
 
 

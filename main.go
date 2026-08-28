@@ -17,7 +17,7 @@ var staticHandler http.Handler
 //go:embed static/*
 var staticFiles embed.FS
 
-var Version = "1.20.0"
+var Version = "1.20.1"
 
 func main() {
 	port := getEnv("PORT", "8080")
