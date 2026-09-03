@@ -1,3 +1,10 @@
+## [1.20.4](https://github.com/martynvdijke/redchef/compare/v1.20.3...v1.20.4) (2026-09-03)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#24](https://github.com/martynvdijke/redchef/issues/24)) ([8285be5](https://github.com/martynvdijke/redchef/commit/8285be538a75210a18f67f0f6206d7845e072c7b))
+
 ## [1.20.3](https://github.com/martynvdijke/redchef/compare/v1.20.2...v1.20.3) (2026-09-02)
 
 ## [1.20.2](https://github.com/martynvdijke/redchef/compare/v1.20.1...v1.20.2) (2026-09-02)
