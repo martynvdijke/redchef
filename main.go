@@ -1,12 +1,19 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"errors"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
+	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"redchef/db"
 	"redchef/handlers"
@@ -154,11 +161,41 @@ func main() {
 
 	mux.Handle("GET /", staticHandler)
 
-	handler := withMiddleware(mux)
+	// OpenTelemetry: opt-in via OTEL_* env vars, no-op otherwise. The handler
+	// is always wrapped so spans/metrics appear as soon as an endpoint is set.
+	shutdownOTel, err := setupOTel(context.Background())
+	if err != nil {
+		log.Printf("OpenTelemetry setup failed, continuing without it: %v", err)
+	}
+	defer func() {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownOTel(flushCtx); err != nil {
+			log.Printf("OpenTelemetry shutdown: %v", err)
+		}
+	}()
 
-	log.Printf("RedChef starting on :%s", port)
-	if err := http.ListenAndServe(":"+port, handler); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	handler := otelhttp.NewHandler(withMiddleware(mux), "redchef",
+		otelhttp.WithServerName(otelServiceName()))
+
+	// Drain in-flight requests and flush telemetry on SIGINT/SIGTERM.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	srv := &http.Server{Addr: ":" + port, Handler: handler}
+	go func() {
+		log.Printf("RedChef starting on :%s", port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("Server failed: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Printf("RedChef shutting down")
+	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutCtx); err != nil {
+		log.Printf("HTTP server shutdown: %v", err)
 	}
 }
 
