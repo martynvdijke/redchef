@@ -1,3 +1,5 @@
+## [1.20.8](https://github.com/martynvdijke/redchef/compare/v1.20.7...v1.20.8) (2026-09-11)
+
 ## [1.20.7](https://github.com/martynvdijke/redchef/compare/v1.20.6...v1.20.7) (2026-09-09)
 
 ## [1.20.6](https://github.com/martynvdijke/redchef/compare/v1.20.5...v1.20.6) (2026-09-07)
