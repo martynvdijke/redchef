@@ -1,3 +1,10 @@
+# [1.21.0](https://github.com/martynvdijke/redchef/compare/v1.20.8...v1.21.0) (2026-09-11)
+
+
+### Features
+
+* **otel:** add OpenTelemetry traces, metrics and logs ([cb60bfb](https://github.com/martynvdijke/redchef/commit/cb60bfbc82970d7d2703d1f6110b0d72f3e3ae4b))
+
 ## [1.20.8](https://github.com/martynvdijke/redchef/compare/v1.20.7...v1.20.8) (2026-09-11)
 
 ## [1.20.7](https://github.com/martynvdijke/redchef/compare/v1.20.6...v1.20.7) (2026-09-09)
