@@ -1,3 +1,10 @@
+## [1.21.1](https://github.com/martynvdijke/redchef/compare/v1.21.0...v1.21.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **deps:** update module go.opentelemetry.io/otel/sdk/log to v1 ([#29](https://github.com/martynvdijke/redchef/issues/29)) ([4fb04c2](https://github.com/martynvdijke/redchef/commit/4fb04c2ba450a2eef98eee5a640c47009e50d25c))
+
 # [1.21.0](https://github.com/martynvdijke/redchef/compare/v1.20.8...v1.21.0) (2026-09-11)
 
 
