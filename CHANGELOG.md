@@ -1,3 +1,10 @@
+## [1.22.2](https://github.com/martynvdijke/redchef/compare/v1.22.1...v1.22.2) (2026-10-17)
+
+
+### Bug Fixes
+
+* **deps:** update dependency cupertino_icons to v2 ([#37](https://github.com/martynvdijke/redchef/issues/37)) ([1d6bc0b](https://github.com/martynvdijke/redchef/commit/1d6bc0b6f01e57deed485242a0f4cb289a5655c5))
+
 ## [1.22.1](https://github.com/martynvdijke/redchef/compare/v1.22.0...v1.22.1) (2026-10-17)
 
 
