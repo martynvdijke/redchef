@@ -1,3 +1,11 @@
+# [1.22.0](https://github.com/martynvdijke/redchef/compare/v1.21.5...v1.22.0) (2026-10-17)
+
+
+### Features
+
+* add Authelia OIDC auth, public post creation and favourite removal endpoints ([866f05b](https://github.com/martynvdijke/redchef/commit/866f05bb8a35da92c8ace5193b1ee0934a266544))
+* **mobile:** add Flutter Android app with non-blocking CI and release integration ([c88f04f](https://github.com/martynvdijke/redchef/commit/c88f04fe592096e79557fb4192c0b46e6cbb51f5))
+
 ## [1.21.5](https://github.com/martynvdijke/redchef/compare/v1.21.4...v1.21.5) (2026-10-12)
 
 ## [1.21.4](https://github.com/martynvdijke/redchef/compare/v1.21.3...v1.21.4) (2026-10-09)
