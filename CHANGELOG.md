@@ -1,3 +1,10 @@
+## [1.22.1](https://github.com/martynvdijke/redchef/compare/v1.22.0...v1.22.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* **mobile:** document local Android build pub-cache workaround ([707105a](https://github.com/martynvdijke/redchef/commit/707105ae0f7f3402ab9a0d45cd2cf607ecf0d17a))
+
 # [1.22.0](https://github.com/martynvdijke/redchef/compare/v1.21.5...v1.22.0) (2026-10-17)
 
 
