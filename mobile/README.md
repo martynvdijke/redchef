@@ -57,3 +57,37 @@ Auth is **session cookie** `session_token` (`HttpOnly`, `SameSite=Lax`). The app
 ## CI
 
 `.github/workflows/flutter-android.yaml` runs `flutter analyze`, `flutter test`, `flutter build apk --release` in `mobile/` (non-blocking, `continue-on-error: true`).
+
+## Troubleshooting
+
+### `flutter build apk` fails at the `jni` CMake configure step
+
+Symptom:
+
+```
+Execution failed for task ':jni:configureCMakeRelWithDebInfo[arm64-v8a]'.
+C/C++: CMake Error at .../CMakeDetermineCCompiler.cmake:226 (configure_file):
+  No such file or directory
+```
+
+with an empty `CMakeError.log` compiler check and no compiler output.
+
+Cause: the `jni` package (pulled in transitively by `path_provider_android`) keeps its CMake build directory inside the **shared** Dart pub cache (`$PUB_CACHE/hosted/pub.dev/jni-1.1.0/android/.cxx/…`). If another Flutter project on the same machine builds the same `jni` version at the same time, its Gradle run deletes/rewrites that directory mid-configure and this build fails. It is not an NDK/CMake/JDK problem — the toolchain works fine on its own.
+
+Fix: give this project its own pub cache so the `.cxx` path is not shared. The cache must live outside the repo.
+
+```bash
+export PUB_CACHE="$HOME/.pub-cache-redchef"
+cd mobile
+flutter clean
+flutter pub get
+flutter build apk --release
+```
+
+`PUB_CACHE` is an environment variable, not a Flutter setting — export it in every shell that builds. `.dart_tool/` and `build/` are gitignored, so this leaves no repo changes and `pubspec.lock` is unchanged (locked versions are reused).
+
+### Android toolchain requirements
+
+- **JDK 17** is required; the default `java` on some hosts is JDK 11 and fails. Set `JAVA_HOME` to a JDK 17 install (e.g. `/usr/lib/jvm/java-17-openjdk`).
+- Export `ANDROID_HOME`/`ANDROID_SDK_ROOT` if unset, and accept licenses once: `yes | flutter doctor --android-licenses`.
+- The build only targets `arm64-v8a`, `armeabi-v7a`, `x86_64`; NDK r28 no longer supports the legacy `armeabi` (ARMv5) ABI.
