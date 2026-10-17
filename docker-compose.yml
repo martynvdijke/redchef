@@ -7,6 +7,14 @@ services:
       PORT: "6270"
       DB_PATH: /db/redchef.db
       UPLOAD_DIR: /app/media
+      OIDC_ENABLED: ${OIDC_ENABLED:-false}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-https://authelia.vandijke.xyz}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-redchef}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_CLIENT_SECRET_FILE: ${OIDC_CLIENT_SECRET_FILE:-}
+      OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-https://redchef.vandijke.xyz/api/auth/oidc/callback}
+      OIDC_SCOPES: ${OIDC_SCOPES:-openid email profile groups}
+      OIDC_LOGOUT_URL: ${OIDC_LOGOUT_URL:-}
     volumes:
       - redchef_media:/app/media
       - redchef_db:/db

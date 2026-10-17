@@ -52,6 +52,10 @@ func main() {
 	mux.HandleFunc("POST /api/auth/forgot", handlers.ForgotPassword)
 	mux.HandleFunc("POST /api/auth/reset", handlers.ResetPassword)
 	mux.Handle("GET /api/auth/me", handlers.AuthMiddleware(http.HandlerFunc(handlers.Me)))
+	mux.HandleFunc("GET /api/auth/oidc/status", handlers.OIDCStatus)
+	mux.HandleFunc("GET /api/auth/oidc/login", handlers.OIDCLogin)
+	mux.HandleFunc("GET /api/auth/oidc/callback", handlers.OIDCCallback)
+	mux.HandleFunc("GET /api/auth/oidc/logout", handlers.OIDCLogout)
 
 	// Paywall API (session only — API tokens are for the public API, not in-app actions)
 	payMux := http.NewServeMux()
@@ -82,6 +86,11 @@ func main() {
 	authMux.HandleFunc("POST /api/posts/{id}/favourite", handlers.ToggleFavourite)
 	authMux.HandleFunc("POST /api/posts/{id}/tip", handlers.CreateTip)
 	mux.Handle("POST /api/posts/", handlers.AuthMiddleware(handlers.RequireAuth(authMux)))
+
+	// Public create-post flow — reuses the admin upload handler for any authenticated user.
+	mux.Handle("POST /api/posts", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.AdminUpload))))
+
+	mux.Handle("DELETE /api/favourites/{id}", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.RemoveFavourite))))
 
 	// API token management (session only — creating a token must not require one)
 	tokenGuard := func(h http.HandlerFunc) http.Handler {

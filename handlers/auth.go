@@ -75,7 +75,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	// Get user to determine role
 	user, _ := db.GetUserByID(userID)
 
-	setSessionCookie(w, session.Token)
+	setSessionCookie(w, r, session.Token)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -119,7 +119,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionCookie(w, session.Token)
+	setSessionCookie(w, r, session.Token)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{Token: session.Token, Role: user.Role})
@@ -198,6 +198,8 @@ const (
 // AuthMiddleware adds user context for every request, doesn't block unauthenticated users.
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Del("X-User-ID")
+		r.Header.Del("X-User-Role")
 		token := getSessionToken(r)
 		if token != "" {
 			if session, err := db.GetUserSession(token); err == nil {
@@ -241,6 +243,8 @@ func RequireAdmin(next http.Handler) http.Handler {
 
 func AdminAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Del("X-User-ID")
+		r.Header.Del("X-User-Role")
 		token := getSessionToken(r)
 		if token != "" {
 			if session, err := db.GetUserSession(token); err == nil {
@@ -289,14 +293,17 @@ func getSessionToken(r *http.Request) string {
 	return cookie.Value
 }
 
-func setSessionCookie(w http.ResponseWriter, token string) {
+func isSecureRequest(r *http.Request) bool { return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") }
+
+func setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   isSecureRequest(r),
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   30 * 86400, // 30 days
+		MaxAge:   30 * 86400,
 	})
 }
 

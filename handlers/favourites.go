@@ -42,6 +42,39 @@ func ToggleFavourite(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func RemoveFavourite(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	postID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		jsonError(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+
+	userID := getUserID(r)
+	if userID == 0 {
+		jsonError(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	// Verify post exists and is publicly visible (drafts 404)
+	if _, ok := visiblePost(w, postID); !ok {
+		return
+	}
+
+	if err := db.RemoveFavourite(userID, postID); err != nil {
+		jsonError(w, "failed to remove favourite", http.StatusInternalServerError)
+		return
+	}
+
+	count, _ := db.GetFavouriteCount(postID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"favourited":      false,
+		"favourite_count": count,
+	})
+}
+
 func ListFavourites(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 	if userID == 0 {

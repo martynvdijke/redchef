@@ -834,7 +834,7 @@ func Setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionCookie(w, session.Token)
+	setSessionCookie(w, r, session.Token)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

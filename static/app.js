@@ -46,6 +46,15 @@ function escapeHtml(str) {
 
 // ── Auth ──
 
+async function checkOIDC() {
+  try {
+    const res = await fetch('/api/auth/oidc/status');
+    const data = await res.json();
+    const wrap = document.getElementById('oidc-login-wrap');
+    if (wrap) wrap.style.display = data.enabled ? 'block' : 'none';
+  } catch (_) {}
+}
+
 async function checkAuth() {
   try {
     const res = await fetch(API.me);
@@ -1304,6 +1313,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Load
+  checkOIDC();
   checkAuth().then(loadContent);
 });
 

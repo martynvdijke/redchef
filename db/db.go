@@ -316,6 +316,17 @@ func migrate() error {
 	migrateAddColumn("posts", "recipe_json", "TEXT NOT NULL DEFAULT ''")
 	migrateAddColumn("posts", "status", "TEXT NOT NULL DEFAULT 'published'")
 	migrateAddColumn("posts", "scheduled_at", "DATETIME")
+	// SQLite cannot ADD COLUMN with UNIQUE; idx_users_oidc_sub below enforces it.
+	migrateAddColumn("users", "oidc_sub", "TEXT DEFAULT NULL")
+	migrateAddColumn("user_sessions", "auth_method", "TEXT DEFAULT 'password'")
+	migrateAddColumn("user_sessions", "oidc_sub", "TEXT DEFAULT ''")
+
+	if _, err := DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub)`); err != nil {
+		log.Printf("[db] create idx_users_oidc_sub: %v", err)
+	}
+	if _, err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`); err != nil {
+		log.Printf("[db] create idx_users_email: %v", err)
+	}
 
 	// Seed default email settings row if table is empty
 	var emailCount int
@@ -1128,6 +1139,11 @@ func ToggleFavourite(userID, postID int64) (bool, error) {
 	// Not favourited — add
 	_, err = DB.Exec("INSERT INTO favourites (user_id, post_id) VALUES (?, ?)", userID, postID)
 	return true, err
+}
+
+func RemoveFavourite(userID, postID int64) error {
+	_, err := DB.Exec("DELETE FROM favourites WHERE user_id = ? AND post_id = ?", userID, postID)
+	return err
 }
 
 func ListFavourites(userID int64) ([]Post, error) {
