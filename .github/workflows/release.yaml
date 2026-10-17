@@ -69,7 +69,7 @@ jobs:
 
       - name: Set up Go
         if: steps.semantic.outputs.new_release_published == 'true'
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.27'
 
@@ -88,6 +88,61 @@ jobs:
           docker push martynvandijke/redchef:$VERSION
           docker push ghcr.io/martynvdijke/redchef:latest
           docker push ghcr.io/martynvdijke/redchef:$VERSION
+
+  android:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    name: Android APK
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Release Tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: v${{ needs.release.outputs.new_release_version }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check mobile directory exists
+        run: |
+          if [ ! -f "mobile/pubspec.yaml" ]; then
+            echo "::notice::mobile/pubspec.yaml not found — skipping Android build"
+            exit 0
+          fi
+
+      - name: Set up Java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build release APK
+        run: |
+          if [ ! -f "mobile/pubspec.yaml" ]; then
+            echo "mobile/pubspec.yaml not found — skipping build"
+            exit 0
+          fi
+          cd mobile
+          flutter build apk --release
+
+      - name: Upload APK to GitHub Release
+        if: hashFiles('mobile/build/app/outputs/flutter-apk/app-release.apk') != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.release.outputs.new_release_version }}
+        run: |
+          APK="mobile/build/app/outputs/flutter-apk/app-release.apk"
+          DEST="redchef-${VERSION}-android.apk"
+          cp "$APK" "$DEST"
+          gh release upload "v${VERSION}" "$DEST" --clobber
 
   trml:
     needs: [ci, release]

@@ -1,0 +1,70 @@
+name: Flutter Android
+
+on:
+  pull_request:
+    branches: ["**"]
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  flutter-android:
+    name: Flutter Android
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check mobile directory exists
+        run: |
+          if [ ! -f "mobile/pubspec.yaml" ]; then
+            echo "::notice::mobile/pubspec.yaml not found — skipping Flutter checks (app not yet created)"
+          else
+            echo "mobile/pubspec.yaml found"
+          fi
+
+      - name: Set up Java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter analyze
+        run: |
+          if [ ! -f "mobile/pubspec.yaml" ]; then
+            echo "mobile/pubspec.yaml not found — skipping flutter analyze"
+            exit 0
+          fi
+          cd mobile
+          flutter analyze
+
+      - name: Flutter test
+        run: |
+          if [ ! -f "mobile/pubspec.yaml" ]; then
+            echo "mobile/pubspec.yaml not found — skipping flutter test"
+            exit 0
+          fi
+          cd mobile
+          flutter test
+
+      - name: Flutter build APK --release
+        run: |
+          if [ ! -f "mobile/pubspec.yaml" ]; then
+            echo "mobile/pubspec.yaml not found — skipping flutter build"
+            exit 0
+          fi
+          cd mobile
+          flutter build apk --release

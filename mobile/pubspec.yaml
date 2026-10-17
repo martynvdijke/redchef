@@ -1,0 +1,28 @@
+name: redchef
+description: "RedChef — social food & media, now on Android."
+publish_to: 'none'
+version: 1.21.1+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.6.1
+  dio: ^5.7.0
+  cached_network_image: ^3.4.1
+  go_router: ^15.1.0
+  flutter_secure_storage: ^9.0.0
+  image_picker: ^1.1.2
+  url_launcher: ^6.2.5
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
