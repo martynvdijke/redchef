@@ -1,3 +1,10 @@
+## [1.22.3](https://github.com/martynvdijke/redchef/compare/v1.22.2...v1.22.3) (2026-10-18)
+
+
+### Bug Fixes
+
+* **deps:** update dependency flutter_secure_storage to v11 ([#39](https://github.com/martynvdijke/redchef/issues/39)) ([f3c5b18](https://github.com/martynvdijke/redchef/commit/f3c5b186f6b857828c093d67b10ffb2ef7669bbf))
+
 ## [1.22.2](https://github.com/martynvdijke/redchef/compare/v1.22.1...v1.22.2) (2026-10-17)
 
 
