@@ -74,6 +74,43 @@ func AdminListPosts(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(posts)
 }
 
+// detectUploadMedia sniffs the first bytes of an upload and maps them to the
+// same media families the rest of the pipeline understands. It rewinds the
+// reader so callers can persist the full file afterwards. A file whose content
+// does not agree with its extension is rejected.
+func detectUploadMedia(f io.ReadSeeker, ext string) (string, error) {
+	head := make([]byte, 512)
+	n, err := io.ReadFull(f, head)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return "", err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	head = head[:n]
+	mime := http.DetectContentType(head)
+
+	switch mime {
+	case "image/jpeg", "image/png", "image/gif", "image/webp":
+		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp" {
+			return "photo", nil
+		}
+	case "video/mp4", "video/webm":
+		if ext == ".mp4" || ext == ".webm" || ext == ".mov" {
+			return "video", nil
+		}
+	}
+
+	// Go's sniffer reports common ISO-BMFF/MOV files as octet-stream. Accept
+	// an ftyp box (optionally QuickTime "qt  ") for video extensions.
+	if len(head) >= 12 && string(head[4:8]) == "ftyp" {
+		if ext == ".mp4" || ext == ".webm" || ext == ".mov" {
+			return "video", nil
+		}
+	}
+	return "", fmt.Errorf("unsupported content type %q", mime)
+}
+
 func AdminUpload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
 
@@ -110,6 +147,14 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Confirm the bytes match the claimed media family; extensions alone are
+	// attacker-controlled. detectUploadMedia also rewinds the file for saving.
+	detected, err := detectUploadMedia(file, ext)
+	if err != nil || detected != mediaType {
+		jsonError(w, "unsupported or invalid file content", http.StatusBadRequest)
+		return
+	}
+
 	// Save original file temporarily
 	filename := fmt.Sprintf("_raw_%d%s", generateID(), ext)
 	dst, err := os.Create(filepath.Join(uploadDir, filename))
@@ -117,8 +162,17 @@ func AdminUpload(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "failed to save file", http.StatusInternalServerError)
 		return
 	}
-	io.Copy(dst, file)
-	dst.Close()
+	if _, err := io.Copy(dst, file); err != nil {
+		dst.Close()
+		os.Remove(filepath.Join(uploadDir, filename))
+		jsonError(w, "failed to save file", http.StatusInternalServerError)
+		return
+	}
+	if err := dst.Close(); err != nil {
+		os.Remove(filepath.Join(uploadDir, filename))
+		jsonError(w, "failed to save file", http.StatusInternalServerError)
+		return
+	}
 
 	// Create post immediately with processing=true
 	post, err := db.CreatePost(title, description, mediaType, filename, filename, locked)

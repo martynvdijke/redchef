@@ -42,4 +42,5 @@ Tokens are owned by the session user; mismatched, expired, revoked, or unknown t
 ## Notes
 
 - Never commit real secrets — use environment variables or secret managers.
-- The `RequireMutationToken` middleware remains available for securing future public-API mutation endpoints, but is no longer enforced for in-app `POST /api/posts/*` and `POST /api/pay/*` routes.
+- In-app mutations (`POST /api/posts/*`, `POST /api/pay/*`, token management, admin actions) authenticate with the session cookie and are protected by a same-origin Origin/Referer check. No separate mutation token is required.
+- Cross-origin API access is disabled by default. Set `CORS_ALLOWED_ORIGINS` (comma-separated, e.g. `https://app.example`) to allow specific browser origins; same-origin and non-browser clients (mobile, curl) keep working without it.

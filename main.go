@@ -7,8 +7,10 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -208,15 +210,96 @@ func main() {
 	}
 }
 
+// corsAllowedOrigins returns the explicitly configured cross-origin allowlist
+// (CORS_ALLOWED_ORIGINS, comma-separated). Same-origin requests are always
+// allowed and need no configuration. Mobile/API clients that send no Origin
+// header are unaffected.
+func corsAllowedOrigins() []string {
+	raw := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if origin := strings.TrimRight(strings.TrimSpace(part), "/"); origin != "" {
+			out = append(out, origin)
+		}
+	}
+	return out
+}
+
+func requestHost(r *http.Request) string {
+	// Use the Host the client connected with. Do not trust X-Forwarded-Host:
+	// it is client-controlled unless a trusted proxy strips it, and trusting it
+	// would let an attacker make a cross-origin request look same-origin.
+	return r.Host
+}
+
+func sameOrigin(r *http.Request, origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return strings.EqualFold(u.Host, requestHost(r))
+}
+
+func originAllowed(r *http.Request, origin string) bool {
+	if sameOrigin(r, origin) {
+		return true
+	}
+	for _, allowed := range corsAllowedOrigins() {
+		if strings.EqualFold(strings.TrimRight(origin, "/"), allowed) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAuthCookie(r *http.Request) bool {
+	if _, err := r.Cookie("session_token"); err == nil {
+		return true
+	}
+	_, err := r.Cookie("admin_token")
+	return err == nil
+}
+
+// withMiddleware applies an explicit CORS allowlist and blocks cross-origin
+// cookie-authenticated mutations (CSRF). Non-browser clients without an Origin
+// header keep working; browsers must send a same-origin Origin/Referer.
 func withMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		origin := r.Header.Get("Origin")
+		allowed := origin != "" && originAllowed(r, origin)
 
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
+		if origin != "" {
+			w.Header().Add("Vary", "Origin")
+		}
+		if allowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
+
+		if r.Method == http.MethodOptions {
+			if origin != "" && !allowed {
+				http.Error(w, "origin not allowed", http.StatusForbidden)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
 			return
+		}
+
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && hasAuthCookie(r) {
+			if origin != "" && !sameOrigin(r, origin) {
+				http.Error(w, "cross-origin request rejected", http.StatusForbidden)
+				return
+			}
+			if origin == "" {
+				if referer := r.Header.Get("Referer"); referer != "" && !sameOrigin(r, referer) {
+					http.Error(w, "cross-origin request rejected", http.StatusForbidden)
+					return
+				}
+			}
 		}
 
 		log.Printf("%s %s", r.Method, r.URL.Path)

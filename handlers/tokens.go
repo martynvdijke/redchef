@@ -3,7 +3,6 @@ package handlers
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -32,47 +31,6 @@ func generateApiTokenSecret() (secret string, hash string, err error) {
 func hashApiToken(secret string) string {
 	sum := sha256.Sum256([]byte(secret))
 	return hex.EncodeToString(sum[:])
-}
-
-// bearerToken extracts "Authorization: Bearer <token>".
-func bearerToken(r *http.Request) string {
-	h := r.Header.Get("Authorization")
-	const prefix = "Bearer "
-	if len(h) <= len(prefix) || !strings.EqualFold(h[:len(prefix)], prefix) {
-		return ""
-	}
-	return strings.TrimSpace(h[len(prefix):])
-}
-
-// RequireMutationToken enforces the second credential for mutations: a valid
-// bearer API token owned by the authenticated session user. It must be
-// composed after AuthMiddleware + RequireAuth. Failures are uniform 401s so
-// token existence is never disclosed.
-func RequireMutationToken(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := getUserID(r)
-		if userID == 0 {
-			jsonError(w, "valid API token required", http.StatusUnauthorized)
-			return
-		}
-		secret := bearerToken(r)
-		if secret == "" {
-			jsonError(w, "valid API token required", http.StatusUnauthorized)
-			return
-		}
-		token, err := db.GetApiTokenByHash(hashApiToken(secret))
-		if err != nil || token.UserID != userID {
-			jsonError(w, "valid API token required", http.StatusUnauthorized)
-			return
-		}
-		// Constant-time confirmation of the hash match (defense in depth).
-		if subtle.ConstantTimeCompare([]byte(token.TokenHash), []byte(hashApiToken(secret))) != 1 {
-			jsonError(w, "valid API token required", http.StatusUnauthorized)
-			return
-		}
-		db.TouchApiToken(token.ID)
-		next.ServeHTTP(w, r)
-	})
 }
 
 // CreateToken issues a new API token for the session user; the secret is

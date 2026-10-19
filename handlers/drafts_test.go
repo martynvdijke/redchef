@@ -158,7 +158,7 @@ func TestAdmin_LifecycleTransitions(t *testing.T) {
 	}
 	writeField("title", "Work In Progress")
 	writeField("status", "draft")
-	buf.WriteString(`Content-Disposition: form-data; name="file"; filename="wip.jpg"` + "\r\n\r\n\x00\x01\x02\r\n")
+	buf.WriteString(`Content-Disposition: form-data; name="file"; filename="wip.jpg"` + "\r\n\r\n\xff\xd8\xff\xe0\r\n")
 	buf.WriteString("--" + boundary + "--\r\n")
 
 	req := authenticatedRequest(t, "POST", "/api/admin/upload", strings.NewReader(buf.String()))

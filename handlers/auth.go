@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -111,6 +112,14 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	if !db.CheckPassword(req.Password, user.PasswordHash) {
 		jsonError(w, "invalid credentials", http.StatusUnauthorized)
 		return
+	}
+
+	// Transparently upgrade legacy SHA-256 hashes (and weak bcrypt costs) after
+	// a successful password check. Failure here must not block login.
+	if db.NeedsPasswordRehash(user.PasswordHash) {
+		if err := db.UpdateUserPassword(user.ID, req.Password); err != nil {
+			log.Printf("password rehash failed for user %d: %v", user.ID, err)
+		}
 	}
 
 	session, err := db.CreateUserSession(user.ID)
@@ -293,7 +302,9 @@ func getSessionToken(r *http.Request) string {
 	return cookie.Value
 }
 
-func isSecureRequest(r *http.Request) bool { return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") }
+func isSecureRequest(r *http.Request) bool {
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
 
 func setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
 	http.SetCookie(w, &http.Cookie{

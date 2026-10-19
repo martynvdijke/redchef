@@ -353,7 +353,9 @@ func TestAdminUpload_VideoType(t *testing.T) {
 	cleanup := setupHandlerTest(t)
 	defer cleanup()
 
-	req := buildUploadRequest(t, "My Video", "desc", "false", []byte("fake video"), "video.mp4")
+	// Minimal ISO-BMFF header (ftyp box) so content sniffing accepts it.
+	mp4 := []byte{0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p', 'm', 'p', '4', '2', 0, 0, 0, 0, 'm', 'p', '4', '2', 'i', 's', 'o', 'm'}
+	req := buildUploadRequest(t, "My Video", "desc", "false", mp4, "video.mp4")
 	resp := httptest.NewRecorder()
 
 	AdminUpload(resp, req)
@@ -465,7 +467,8 @@ func TestAdminUpload_WebPSupport(t *testing.T) {
 	cleanup := setupHandlerTest(t)
 	defer cleanup()
 
-	req := buildUploadRequest(t, "WebP", "", "false", []byte("webp data"), "image.webp")
+	webp := []byte("RIFF\x24\x00\x00\x00WEBPVP8 ")
+	req := buildUploadRequest(t, "WebP", "", "false", webp, "image.webp")
 	resp := httptest.NewRecorder()
 
 	AdminUpload(resp, req)
@@ -478,6 +481,55 @@ func TestAdminUpload_WebPSupport(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result.MediaType != "photo" {
 		t.Errorf("expected media_type 'photo', got %q", result.MediaType)
+	}
+}
+
+func TestAdminUpload_RejectsSpoofedExtension(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	// A text payload renamed to .jpg must not be accepted as a photo.
+	req := buildUploadRequest(t, "Spoofed", "", "false", []byte("this is not an image"), "payload.jpg")
+	resp := httptest.NewRecorder()
+	AdminUpload(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for spoofed image, got %d: %s", resp.Code, resp.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(uploadDir, "_raw_*")); err == nil {
+		t.Error("rejected upload must not leave a file on disk")
+	}
+}
+
+func TestAdminUpload_RejectsMismatchedFamily(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	imgData := createTestImage(t)
+	req := buildUploadRequest(t, "Image as video", "", "false", imgData, "clip.mp4")
+	resp := httptest.NewRecorder()
+	AdminUpload(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when image bytes claim .mp4, got %d: %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestDetectUploadMedia(t *testing.T) {
+	img := bytes.NewReader(createTestImage(t))
+	if media, err := detectUploadMedia(img, ".jpg"); err != nil || media != "photo" {
+		t.Fatalf("jpeg detect: media=%q err=%v", media, err)
+	}
+	webp := bytes.NewReader([]byte("RIFF\x24\x00\x00\x00WEBPVP8 "))
+	if media, err := detectUploadMedia(webp, ".webp"); err != nil || media != "photo" {
+		t.Fatalf("webp detect: media=%q err=%v", media, err)
+	}
+	mp4 := bytes.NewReader([]byte{0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p', 'm', 'p', '4', '2', 0, 0, 0, 0, 'm', 'p', '4', '2', 'i', 's', 'o', 'm'})
+	if media, err := detectUploadMedia(mp4, ".mp4"); err != nil || media != "video" {
+		t.Fatalf("mp4 detect: media=%q err=%v", media, err)
+	}
+	if _, err := detectUploadMedia(bytes.NewReader([]byte("nope")), ".jpg"); err == nil {
+		t.Fatal("garbage should not be detected as media")
 	}
 }
 

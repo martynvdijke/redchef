@@ -3,12 +3,15 @@ package db
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	_ "modernc.org/sqlite"
 )
@@ -1277,19 +1280,39 @@ func parseTime(s string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("cannot parse time: %q", s)
 }
 
+// hashPassword creates a bcrypt hash. New and rehashed credentials always use
+// bcrypt; CheckPassword still understands the legacy SHA-256 salt:hash format.
 func hashPassword(password string) (string, error) {
-	salt := generateToken(16)
-	hash := sha256Hash(salt + password)
-	return salt + ":" + hash, nil
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
 }
 
+// CheckPassword verifies a bcrypt hash, or a legacy single-round
+// sha256(salt+password) hash stored as 32-hex salt ":" 64-hex digest.
 func CheckPassword(password, stored string) bool {
-	if len(stored) < 49 {
+	if strings.HasPrefix(stored, "$2a$") || strings.HasPrefix(stored, "$2b$") || strings.HasPrefix(stored, "$2y$") {
+		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil
+	}
+	if len(stored) != 97 || stored[32] != ':' {
 		return false
 	}
 	salt := stored[:32]
-	hash := stored[33:]
-	return sha256Hash(salt+password) == hash
+	expected := stored[33:]
+	sum := sha256Hash(salt + password)
+	return subtle.ConstantTimeCompare([]byte(sum), []byte(expected)) == 1
+}
+
+// NeedsPasswordRehash reports whether a stored hash is legacy or below the
+// current bcrypt cost. Callers rehash transparently after a successful login.
+func NeedsPasswordRehash(stored string) bool {
+	if !strings.HasPrefix(stored, "$2a$") && !strings.HasPrefix(stored, "$2b$") && !strings.HasPrefix(stored, "$2y$") {
+		return true
+	}
+	cost, err := bcrypt.Cost([]byte(stored))
+	return err != nil || cost < bcrypt.DefaultCost
 }
 
 func sha256Hash(s string) string {

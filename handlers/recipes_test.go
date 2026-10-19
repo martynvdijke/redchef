@@ -285,7 +285,7 @@ func TestAdminUpload_RecipeAndTagsFormFields(t *testing.T) {
 	writeField("tags", "Baking, Bread")
 	buf.WriteString(`Content-Disposition: form-data; name="file"; filename="cake.jpg"` + "\r\n")
 	buf.WriteString("Content-Type: image/jpeg\r\n\r\n")
-	buf.WriteString("\x00\x01\x02fakejpegdata\r\n")
+	buf.WriteString("\xff\xd8\xff\xe0fakejpegdata\r\n")
 	buf.WriteString("--" + boundary + "--\r\n")
 
 	req := authenticatedRequest(t, "POST", "/api/admin/upload", strings.NewReader(buf.String()))
@@ -317,7 +317,7 @@ func TestAdminUpload_RecipeAndTagsFormFields(t *testing.T) {
 	writeField("recipe", `{not-json`)
 	buf.WriteString(`Content-Disposition: form-data; name="file"; filename="pie.jpg"` + "\r\n")
 	buf.WriteString("Content-Type: image/jpeg\r\n\r\n")
-	buf.WriteString("\x00\x01\x02fake\r\n")
+	buf.WriteString("\xff\xd8\xff\xe0fake\r\n")
 	buf.WriteString("--" + boundary + "--\r\n")
 
 	req = authenticatedRequest(t, "POST", "/api/admin/upload", strings.NewReader(buf.String()))

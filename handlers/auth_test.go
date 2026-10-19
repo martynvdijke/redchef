@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"redchef/db"
@@ -529,5 +532,58 @@ func TestAdminAuth_LegacyToken(t *testing.T) {
 
 	if resp.Code != http.StatusOK {
 		t.Fatalf("expected 200 for legacy token, got %d", resp.Code)
+	}
+}
+
+func legacySHA256Hash(password string) string {
+	salt := "0123456789abcdef0123456789abcdef"
+	sum := sha256.Sum256([]byte(salt + password))
+	return salt + ":" + hex.EncodeToString(sum[:])
+}
+
+func TestLogin_RehashesLegacySHA256(t *testing.T) {
+	cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	if _, err := db.CreateUser("legacy@test.com", "legacypass123"); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	user, _ := db.GetUserByEmail("legacy@test.com")
+	legacy := legacySHA256Hash("legacypass123")
+	if _, err := db.DB.Exec("UPDATE users SET password_hash = ? WHERE id = ?", legacy, user.ID); err != nil {
+		t.Fatalf("set legacy hash: %v", err)
+	}
+	if !db.CheckPassword("legacypass123", legacy) {
+		t.Fatal("legacy hash should verify before migration")
+	}
+
+	body := bytes.NewReader([]byte(`{"email":"legacy@test.com","password":"legacypass123"}`))
+	req := httptest.NewRequest("POST", "/api/auth/login", body)
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	Login(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("legacy login failed: %d %s", resp.Code, resp.Body.String())
+	}
+
+	updated, _ := db.GetUserByEmail("legacy@test.com")
+	if !strings.HasPrefix(updated.PasswordHash, "$2") {
+		t.Fatalf("password was not rehashed to bcrypt: %q", updated.PasswordHash)
+	}
+	if !db.CheckPassword("legacypass123", updated.PasswordHash) {
+		t.Error("rehashed password should still verify")
+	}
+	if db.CheckPassword("wrongpass", updated.PasswordHash) {
+		t.Error("rehashed password accepted a wrong password")
+	}
+
+	// Second login verifies the bcrypt hash and does not crash.
+	body = bytes.NewReader([]byte(`{"email":"legacy@test.com","password":"legacypass123"}`))
+	req = httptest.NewRequest("POST", "/api/auth/login", body)
+	req.Header.Set("Content-Type", "application/json")
+	resp = httptest.NewRecorder()
+	Login(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("bcrypt login failed: %d %s", resp.Code, resp.Body.String())
 	}
 }

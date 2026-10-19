@@ -1,7 +1,10 @@
 package db
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -374,5 +377,35 @@ func TestCreatePostEmptyDescription(t *testing.T) {
 	}
 	if post.Description != "" {
 		t.Errorf("expected empty description, got %q", post.Description)
+	}
+}
+
+func TestPasswordHashLegacyAndRehashDetection(t *testing.T) {
+	salt := "0123456789abcdef0123456789abcdef"
+	sum := sha256.Sum256([]byte(salt + "hunter2"))
+	legacy := salt + ":" + hex.EncodeToString(sum[:])
+
+	if !CheckPassword("hunter2", legacy) {
+		t.Fatal("legacy hash should verify")
+	}
+	if CheckPassword("wrong", legacy) {
+		t.Fatal("legacy hash accepted wrong password")
+	}
+	if !NeedsPasswordRehash(legacy) {
+		t.Fatal("legacy hash should need rehash")
+	}
+
+	hash, err := hashPassword("hunter2")
+	if err != nil {
+		t.Fatalf("hashPassword: %v", err)
+	}
+	if !strings.HasPrefix(hash, "$2") {
+		t.Fatalf("new hash should be bcrypt, got %q", hash)
+	}
+	if !CheckPassword("hunter2", hash) || CheckPassword("wrong", hash) {
+		t.Fatal("bcrypt verification failed")
+	}
+	if NeedsPasswordRehash(hash) {
+		t.Fatal("current bcrypt hash should not need rehash")
 	}
 }
