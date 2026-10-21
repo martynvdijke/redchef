@@ -1,3 +1,10 @@
+## [1.22.4](https://github.com/martynvdijke/redchef/compare/v1.22.3...v1.22.4) (2026-10-21)
+
+
+### Bug Fixes
+
+* **android:** allow self-hosted HTTP, sign releases and fix OIDC login ([2f1243c](https://github.com/martynvdijke/redchef/commit/2f1243c172da28300478437c91fd829260afd539))
+
 ## [1.22.3](https://github.com/martynvdijke/redchef/compare/v1.22.2...v1.22.3) (2026-10-18)
 
 
