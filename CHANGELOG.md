@@ -1,3 +1,10 @@
+# [1.23.0](https://github.com/martynvdijke/redchef/compare/v1.22.4...v1.23.0) (2026-10-21)
+
+
+### Features
+
+* **mobile:** fix OIDC sign-in and brand the Android app ([d51c3bf](https://github.com/martynvdijke/redchef/commit/d51c3bfeaadb4df2f5eec52b6b6d8165a0c69998))
+
 ## [1.22.4](https://github.com/martynvdijke/redchef/compare/v1.22.3...v1.22.4) (2026-10-21)
 
 
