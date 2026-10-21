@@ -84,7 +84,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 keyboardType: TextInputType.url,
                 autocorrect: false,
                 decoration: InputDecoration(
-                  hintText: 'https://redchef.example.com',
                   prefixIcon: const Icon(Icons.link),
                   errorText: error,
                 ),
@@ -99,14 +98,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 child: validating
                     ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Text('Continue'),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: () {
-                  ctrl.text = 'http://10.0.2.2:8080';
-                  setState(() {});
-                },
-                child: const Text('Use emulator default (10.0.2.2:8080)'),
               ),
             ],
           ),

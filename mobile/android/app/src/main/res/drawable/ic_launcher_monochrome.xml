@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    RedChef themed-icon silhouette (Android 13+).
+    Single colour: the system tints the opaque pixels, so the egg white is a
+    transparent hole and the yolk floats inside it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Pan ring: outer disc minus the egg white -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M26.9,57.86 a22.5,22.5 0 1,0 45,0 a22.5,22.5 0 1,0 -45,0 Z
+            M65.1,57.86 C65.03,61.54 62.84,66.05 60.22,68.68 C57.6,71.31 53.08,73.59 49.4,73.66 C45.72,73.73 40.72,71.74 38.16,69.1 C35.59,66.47 33.92,61.53 34,57.86 C34.08,54.19 36.09,49.73 38.65,47.11 C41.22,44.5 45.73,42.24 49.4,42.16 C53.07,42.08 58.03,44 60.64,46.62 C63.26,49.23 65.17,54.18 65.1,57.86 Z" />
+
+    <!-- Yolk -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M38.6,57.86 a8.1,8.1 0 1,0 16.2,0 a8.1,8.1 0 1,0 -16.2,0 Z" />
+
+    <!-- Handle: starts inside the pan ring so it never pokes through the egg hole -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M67.72,48.57 L79.52,38.07 A4.2,4.2 0 0,0 74.12,31.63 L61.72,41.43 Z" />
+</vector>

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api/api_client.dart';
 import '../api/models.dart';
+import '../utils/oidc.dart';
 import 'storage.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
@@ -88,6 +89,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         } catch (_) {}
       }
     }
+    // Drop any identity provider session kept by the in-app WebView.
+    await clearWebViewCookies();
     try { await SecureStore.clearAll(); } catch (_) {}
     state = AuthState(me: MeResponse(authenticated: false));
     await refreshMe();

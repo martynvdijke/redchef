@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher icon background (deep red, matches the app seed colour) -->
+    <color name="ic_launcher_background">#C0392B</color>
+    <!-- Brand cream, also used behind the launch splash -->
+    <color name="splash_background">#FFFBF5</color>
+</resources>

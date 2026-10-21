@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_provider.dart';
+import '../utils/oidc.dart';
 import 'oidc_webview_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -15,6 +16,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
   bool loading = false;
+  bool _oidcBusy = false;
   String? error;
   bool oidcEnabled = false;
 
@@ -46,20 +48,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _oidc() async {
+    if (_oidcBusy) return;
     final api = ref.read(apiClientProvider);
     final base = api.baseUrl;
     if (base == null) return;
-    final token = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => OidcWebViewScreen(baseUrl: base)),
-    );
-    if (token == null || token.isEmpty || !mounted) return;
-    await api.setSessionCookie(token);
-    await ref.read(authProvider.notifier).refreshMe();
-    if (!mounted) return;
-    if (ref.read(authProvider).authenticated) {
-      context.go('/');
-    } else {
-      setState(() => error = 'Sign-in did not complete. Try again.');
+    setState(() {
+      _oidcBusy = true;
+      error = null;
+    });
+    try {
+      final result = await Navigator.of(context).push<OidcResult>(
+        MaterialPageRoute(builder: (_) => OidcWebViewScreen(baseUrl: base)),
+      );
+      if (!mounted) return;
+      // `null` means the user cancelled.
+      if (result == null) return;
+      if (!result.isSuccess) {
+        setState(() => error = result.error ?? 'Sign-in failed. Please try again.');
+        return;
+      }
+      await api.setSessionCookie(result.token!);
+      await ref.read(authProvider.notifier).refreshMe();
+      if (!mounted) return;
+      if (ref.read(authProvider).authenticated) {
+        context.go('/');
+      } else {
+        setState(() => error = 'Sign-in did not complete. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _oidcBusy = false);
     }
   }
 
@@ -121,9 +138,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const Row(children: [Expanded(child: Divider()), Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('or')), Expanded(child: Divider())]),
               const SizedBox(height: 16),
               OutlinedButton.icon(
-                onPressed: _oidc,
-                icon: const Icon(Icons.shield_outlined),
-                label: const Text('Login with Authelia'),
+                onPressed: _oidcBusy ? null : _oidc,
+                icon: _oidcBusy
+                    ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.shield_outlined),
+                label: const Text('Continue with SSO'),
                 style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
               ),
               const SizedBox(height: 8),

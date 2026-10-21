@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="RedChef app icon">
+  <title>RedChef</title>
+  <!--
+    RedChef app icon — master artwork (1024 x 1024 = the 108dp adaptive canvas).
+
+    Palette (mirrors mobile/lib/src/theme.dart):
+      #C0392B  deep red   brand field / adaptive background
+      #B87333  copper     pan rim + handle end sleeve
+      #2B1B17  charcoal   pan body + handle
+      #FFF7EC  cream      egg white
+      #F39C12  egg yolk
+      #FFC766  light gold yolk highlight
+
+    Geometry: every point stays within 34dp of the canvas centre, i.e. inside
+    the 66x66dp safe zone AND the 72dp circular launcher mask, so no mask can
+    clip the handle. One master drives the legacy PNGs, the adaptive
+    foreground and the store artwork.
+
+    Raster exports:
+      rsvg-convert -w 1024 -h 1024 app_icon.svg -o app_icon.png
+      sed 's|^  <rect id="brand-bg".*$||' app_icon.svg > /tmp/fg.svg
+      rsvg-convert -w 1024 -h 1024 /tmp/fg.svg -o app_icon_foreground.png
+  -->
+  <rect id="brand-bg" width="1024" height="1024" fill="#C0392B"/>
+
+  <g id="icon">
+    <!-- Handle, 40deg up-right, tapering into a rounded tip.
+         Drawn first: the pan rim overlaps the joint. -->
+    <path id="handle" fill="#2B1B17"
+          d="M585.39 511.05 L753.97 360.96 A39.82 39.82 0 0 0 702.77 299.9 L525.65 439.85 Z"/>
+    <!-- Copper sleeve at the end of the handle -->
+    <path id="handle-sleeve" fill="#B87333"
+          d="M712.91 397.46 L753.97 360.96 A39.82 39.82 0 0 0 702.77 299.9 L659.63 334.03 Z"/>
+
+    <!-- Pan: copper rim outside, charcoal body inside -->
+    <circle id="pan-rim" cx="468.39" cy="548.6" r="213.33" fill="#B87333"/>
+    <circle id="pan" cx="468.39" cy="548.6" r="184.89" fill="#2B1B17"/>
+
+    <!-- Egg white: soft, slightly lopsided blob so the pan does not read as a donut -->
+    <path id="egg-white" fill="#FFF7EC"
+          d="M617.24 548.6 C 616.58 583.49, 595.82 626.25, 570.97 651.19
+             C 546.13 676.12, 503.28 697.74, 468.39 698.41
+             C 433.49 699.07, 386.09 680.2, 361.81 655.17
+             C 337.45 630.23, 321.61 583.4, 322.37 548.6
+             C 323.13 513.8, 342.19 471.51, 366.46 446.67
+             C 390.83 421.93, 433.59 400.5, 468.39 399.74
+             C 503.18 398.98, 550.21 417.19, 574.96 442.03
+             C 599.8 466.77, 617.91 513.71, 617.24 548.6 Z"/>
+
+    <!-- Yolk + highlight -->
+    <circle id="yolk" cx="442.79" cy="548.6" r="76.8" fill="#F39C12"/>
+    <circle id="yolk-highlight" cx="425.72" cy="527.17" r="22.28" fill="#FFC766"/>
+  </g>
+</svg>

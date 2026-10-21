@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    RedChef adaptive icon foreground (Android 8+).
+    108 x 108 viewport: the artwork stays within 34dp of the centre, so it
+    sits inside both the 66 x 66 safe zone and the circular launcher mask.
+    Mirrors mobile/assets/branding/app_icon.svg — the background colour comes
+    from @color/ic_launcher_background.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Handle, up and to the right, tapering to a rounded tip -->
+    <path
+        android:fillColor="#2B1B17"
+        android:pathData="M61.74,53.9 L79.52,38.07 A4.2,4.2 0 0,0 74.12,31.63 L55.44,46.39 Z" />
+    <!-- Copper sleeve at the end of the handle -->
+    <path
+        android:fillColor="#B87333"
+        android:pathData="M75.19,41.92 L79.52,38.07 A4.2,4.2 0 0,0 74.12,31.63 L69.57,35.23 Z" />
+
+    <!-- Copper rim -->
+    <path
+        android:fillColor="#B87333"
+        android:pathData="M26.9,57.86 a22.5,22.5 0 1,0 45,0 a22.5,22.5 0 1,0 -45,0 Z" />
+    <!-- Charcoal pan body -->
+    <path
+        android:fillColor="#2B1B17"
+        android:pathData="M29.9,57.86 a19.5,19.5 0 1,0 39,0 a19.5,19.5 0 1,0 -39,0 Z" />
+
+    <!-- Cream egg white -->
+    <path
+        android:fillColor="#FFF7EC"
+        android:pathData="M65.1,57.86 C65.03,61.54 62.84,66.05 60.22,68.68 C57.6,71.31 53.08,73.59 49.4,73.66 C45.72,73.73 40.72,71.74 38.16,69.1 C35.59,66.47 33.92,61.53 34,57.86 C34.08,54.19 36.09,49.73 38.65,47.11 C41.22,44.5 45.73,42.24 49.4,42.16 C53.07,42.08 58.03,44 60.64,46.62 C63.26,49.23 65.17,54.18 65.1,57.86 Z" />
+
+    <!-- Yolk and highlight -->
+    <path
+        android:fillColor="#F39C12"
+        android:pathData="M38.6,57.86 a8.1,8.1 0 1,0 16.2,0 a8.1,8.1 0 1,0 -16.2,0 Z" />
+    <path
+        android:fillColor="#FFC766"
+        android:pathData="M42.55,55.6 a2.35,2.35 0 1,0 4.7,0 a2.35,2.35 0 1,0 -4.7,0 Z" />
+</vector>

@@ -13,16 +13,16 @@ flutter test               # hermetic, mocked network
 flutter build apk --release   # CI does this; requires Android SDK
 ```
 
-Emulator default server URL: `http://10.0.2.2:8080` (host's `http://localhost:8080`).
+Optional local testing: with an Android emulator, the host's `http://localhost:8080` is reachable as `http://10.0.2.2:8080` from inside the emulator. This is not a default — enter your own server address on first launch.
 Physical device: use your LAN IP, e.g. `http://192.168.1.10:8080`.
 
 ## Configure
 
 1. On first launch, enter the **Server URL** (base URL without trailing slash). Validated via `GET /api/setup/status` (public) — shows a clear error if the URL isn't a RedChef server (e.g. 404 on `/api/setup/status` + `/api/auth/me`).
 2. Log in / Register, or continue as guest to browse.
-3. If the server has OIDC enabled (`GET /api/auth/oidc/status → {enabled:true}`), a **Login with Authelia** button appears and opens `/api/auth/oidc/login` in the external browser. After completing OIDC, tap *I've logged in — refresh*.
+3. If the server has OIDC enabled (`GET /api/auth/oidc/status → {enabled:true}`), a **Continue with SSO** button appears and opens `/api/auth/oidc/login` in an **in-app WebView** (no external browser). Sign in with your identity provider there; when the flow returns to the RedChef origin the app captures the server's `session_token` cookie and continues automatically. Server error redirects (`/?error=…`) are shown inline with a Retry option.
 
-Auth is **session cookie** `session_token` (`HttpOnly`, `SameSite=Lax`). The app captures `Set-Cookie` from login/register and sends `Cookie: session_token=…` via a Dio interceptor, persisting to `flutter_secure_storage`. The server URL is also persisted there.
+Auth is **session cookie** `session_token` (`HttpOnly`, `SameSite=Lax`). The app captures `Set-Cookie` from login/register and sends `Cookie: session_token=…` via a Dio interceptor, persisting to `flutter_secure_storage`. For SSO, the `HttpOnly` cookie is read from the native WebView cookie store over a small platform channel, and only when the current WebView URL is same-origin as the configured server. The server URL is also persisted there.
 
 ## Features
 
@@ -33,7 +33,7 @@ Auth is **session cookie** `session_token` (`HttpOnly`, `SameSite=Lax`). The app
 - **Forgot / Reset password** — login screen links to `POST /api/auth/forgot` `{email}` (always 200, shows `message`) and `POST /api/auth/reset` `{token,password,confirm_password}` (manual token entry; deep link out of scope).
 - **Admin posts** (`GET /api/admin/posts?status=draft|published`, `DELETE /api/admin/posts/{id}`) — admin-only screen with status filter and delete confirmation.
 - **API tokens** (`GET /api/tokens`, `POST /api/tokens` `{name}` → show `token` once, `DELETE /api/tokens/{id}`, `POST /api/tokens/{id}/rotate`) — list/create/revoke/rotate with copy.
-- **Account / Settings** — profile (email/role/server), links to Admin posts, API tokens, Change server, and **Logout** (local `POST /api/auth/logout` + if OIDC enabled open `/api/auth/oidc/logout` via `url_launcher` to clear IdP session; otherwise local logout still works).
+- **Account / Settings** — profile (email/role/server), links to Admin posts, API tokens, Change server, and **Logout** (local `POST /api/auth/logout` + if OIDC enabled open `/api/auth/oidc/logout` via `url_launcher` to clear IdP session, plus clear the in-app WebView cookie store; otherwise local logout still works).
 - **Onboarding validation** — `GET /api/setup/status` checked first; fallback to `/api/auth/me`; clear error if not a RedChef server.
 
 ## Navigation
@@ -52,7 +52,8 @@ Auth is **session cookie** `session_token` (`HttpOnly`, `SameSite=Lax`). The app
 - `lib/src/auth/` — `AuthNotifier` + secure storage (covers forgot/reset, tips, admin, tokens, OIDC logout, setup status)
 - `lib/src/screens/` — onboarding, login/register, forgot/reset, feed, detail (tip), composer (POST /api/posts), favourites, admin_posts, tokens, account
 - `lib/src/routing/router.dart` — `GoRouter` with onboarding redirect
-- `test/` — `models_test.dart`, `auth_test.dart`, `widget_test.dart` (mocked Dio, hermetic; includes TipResult/ApiToken parsing + forgot/reset/account smoke)
+- `lib/src/` — screens and helpers; `utils/oidc.dart` holds same-origin/error-code helpers for the in-app SSO flow
+- `test/` — `models_test.dart`, `auth_test.dart`, `widget_test.dart`, `oidc_test.dart`, `onboarding_test.dart` (mocked Dio, hermetic; includes TipResult/ApiToken parsing + forgot/reset/account smoke)
 
 ## CI
 
