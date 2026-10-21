@@ -2,8 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../auth/auth_provider.dart';
+import 'oidc_webview_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -46,12 +46,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _oidc() async {
-    final base = ref.read(apiClientProvider).baseUrl;
+    final api = ref.read(apiClientProvider);
+    final base = api.baseUrl;
     if (base == null) return;
-    final uri = Uri.parse('$base/api/auth/oidc/login');
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final token = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => OidcWebViewScreen(baseUrl: base)),
+    );
+    if (token == null || token.isEmpty || !mounted) return;
+    await api.setSessionCookie(token);
+    await ref.read(authProvider.notifier).refreshMe();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Opened browser — complete login there, then return and pull to refresh or tap “I\'ve logged in”')));
+    if (ref.read(authProvider).authenticated) {
+      context.go('/');
+    } else {
+      setState(() => error = 'Sign-in did not complete. Try again.');
+    }
   }
 
   @override
@@ -118,15 +127,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
               ),
               const SizedBox(height: 8),
-              TextButton(
-                onPressed: () async {
-                  await ref.read(authProvider.notifier).refreshMe();
-                  if (context.mounted && ref.read(authProvider).authenticated) {
-                    context.go('/');
-                  }
-                },
-                child: const Text("I've logged in — refresh"),
-              ),
             ],
             const SizedBox(height: 12),
             TextButton(onPressed: () => context.go('/'), child: const Text('Continue as guest')),

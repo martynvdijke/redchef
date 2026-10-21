@@ -1,6 +1,24 @@
 import 'package:dio/dio.dart';
 import '../auth/storage.dart';
 
+/// Extracts cookie [name] from a raw `Cookie:` request header value
+/// (`a=b; session=xyz`). Used to read the session captured by the OIDC WebView.
+///
+/// Returns `null` when the cookie is absent or was cleared (empty value), which
+/// lets callers treat logout / expiry uniformly.
+String? parseCookieHeader(String? header, String name) {
+  if (header == null || header.isEmpty) return null;
+  for (final part in header.split(';')) {
+    final pair = part.trim();
+    final equals = pair.indexOf('=');
+    if (equals <= 0) continue;
+    if (pair.substring(0, equals).trim() != name) continue;
+    final value = pair.substring(equals + 1).trim();
+    return value.isEmpty ? null : value;
+  }
+  return null;
+}
+
 class ApiClient {
   final Dio dio;
   String? _baseUrl;
@@ -77,6 +95,15 @@ class ApiClient {
     if (v.endsWith('/')) v = v.substring(0, v.length - 1);
     _baseUrl = v;
     dio.options.baseUrl = v;
+  }
+
+  /// Stores a `session_token` value captured by the OIDC WebView, in memory and
+  /// in secure storage, so subsequent requests are authenticated.
+  Future<void> setSessionCookie(String value) async {
+    _cookie = value;
+    try {
+      await SecureStore.setCookie(value);
+    } catch (_) {}
   }
 
   String resolveMedia(String? mediaUrl) {
