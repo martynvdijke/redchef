@@ -1,7 +1,7 @@
 name: redchef
 description: "RedChef — social food & media, now on Android."
 publish_to: 'none'
-version: 1.23.0+1023000
+version: 1.23.1+1023001
 
 environment:
   sdk: ^3.5.0

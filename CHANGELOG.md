@@ -1,3 +1,11 @@
+## [1.23.1](https://github.com/martynvdijke/redchef/compare/v1.23.0...v1.23.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **deps:** update dependency flutter_riverpod to v3 ([60d825e](https://github.com/martynvdijke/redchef/commit/60d825ed063f2da0111dc89fa4eb1005b6695929))
+* **deps:** update dependency go_router to v18 ([1484356](https://github.com/martynvdijke/redchef/commit/1484356fee7d973fa00647fad0571b2e3dc4bd70))
+
 # [1.23.0](https://github.com/martynvdijke/redchef/compare/v1.22.4...v1.23.0) (2026-10-21)
 
 
