@@ -1,3 +1,10 @@
+# [1.24.0](https://github.com/martynvdijke/redchef/compare/v1.23.1...v1.24.0) (2026-10-27)
+
+
+### Features
+
+* **release:** publish android bundles to google play and add emulator e2e ([ca34f33](https://github.com/martynvdijke/redchef/commit/ca34f332ae97c63ced5ea97bee0fa1e7381892bf))
+
 ## [1.23.1](https://github.com/martynvdijke/redchef/compare/v1.23.0...v1.23.1) (2026-10-25)
 
 
