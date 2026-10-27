@@ -1,3 +1,10 @@
+## [1.24.1](https://github.com/martynvdijke/redchef/compare/v1.24.0...v1.24.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **deps:** update dependency cached_network_image to v4 ([2bc6b04](https://github.com/martynvdijke/redchef/commit/2bc6b0441c610ca94280a413b4db0cd27bdd3991))
+
 # [1.24.0](https://github.com/martynvdijke/redchef/compare/v1.23.1...v1.24.0) (2026-10-27)
 
 
