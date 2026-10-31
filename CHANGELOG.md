@@ -1,3 +1,10 @@
+## [1.25.2](https://github.com/martynvdijke/redchef/compare/v1.25.1...v1.25.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* **mobile:** restore release build after Riverpod and go_router updates ([1f41923](https://github.com/martynvdijke/redchef/commit/1f41923138d11efcef583ff6ff9e202dd465bac3))
+
 ## [1.25.1](https://github.com/martynvdijke/redchef/compare/v1.25.0...v1.25.1) (2026-10-31)
 
 
