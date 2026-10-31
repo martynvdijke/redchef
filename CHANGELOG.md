@@ -1,3 +1,10 @@
+## [1.25.1](https://github.com/martynvdijke/redchef/compare/v1.25.0...v1.25.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **ci:** point flutter setup at root fvmrc ([6d63a6b](https://github.com/martynvdijke/redchef/commit/6d63a6be84dea668c7a3df049ec5e05b4ecbb898))
+
 # [1.25.0](https://github.com/martynvdijke/redchef/compare/v1.24.1...v1.25.0) (2026-10-31)
 
 
