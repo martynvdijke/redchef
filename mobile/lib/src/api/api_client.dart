@@ -1,6 +1,10 @@
 import 'package:dio/dio.dart';
 import '../auth/storage.dart';
 
+/// Hosted RedChef instance offered on first run. Users can still point the app
+/// at their own self-hosted server from onboarding.
+const String defaultRedChefBaseUrl = 'https://redchef.vandijke.xyz';
+
 /// Extracts cookie [name] from a raw `Cookie:` request header value
 /// (`a=b; session=xyz`). Used to read the session captured by the OIDC WebView.
 ///

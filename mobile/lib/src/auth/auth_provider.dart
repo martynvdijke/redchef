@@ -223,3 +223,11 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final api = ref.watch(apiClientProvider);
   return AuthNotifier(api);
 });
+
+/// Validates a candidate server URL, returning a human-readable error or null.
+typedef ServerUrlValidator = Future<String?> Function(String url);
+
+/// Indirection so server-URL probes can be faked in widget tests.
+final serverUrlValidatorProvider = Provider<ServerUrlValidator>((ref) {
+  return (url) => ref.read(authProvider.notifier).validateServerUrlDetailed(url);
+});

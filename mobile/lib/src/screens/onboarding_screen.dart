@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../api/api_client.dart';
 import '../auth/auth_provider.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -12,13 +13,41 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final ctrl = TextEditingController();
   bool validating = false;
+  bool probingDefault = false;
+  String? probeNote;
   String? error;
 
   @override
   void initState() {
     super.initState();
-    final base = ref.read(apiClientProvider).baseUrl;
-    if (base != null) ctrl.text = base;
+    _initServer();
+  }
+
+  Future<void> _initServer() async {
+    final api = ref.read(apiClientProvider);
+    // The app loads any persisted URL before routing, so this is a first run
+    // when it is absent. A saved URL always wins and is never overwritten.
+    final saved = api.baseUrl;
+    if (saved != null && saved.isNotEmpty) {
+      ctrl.text = saved;
+      return;
+    }
+    ctrl.text = defaultRedChefBaseUrl;
+    await _probeDefault();
+  }
+
+  /// Read-only reachability check for the hosted default; it does not save or
+  /// change the selected server.
+  Future<void> _probeDefault() async {
+    setState(() => probingDefault = true);
+    final err = await ref.read(serverUrlValidatorProvider)(defaultRedChefBaseUrl);
+    if (!mounted) return;
+    setState(() {
+      probingDefault = false;
+      probeNote = err == null
+          ? 'Default instance is reachable — continue to sign in.'
+          : 'Could not reach the default instance right now — check your connection or enter another server.';
+    });
   }
 
   Future<void> _save() async {
@@ -87,11 +116,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   prefixIcon: const Icon(Icons.link),
                   errorText: error,
                 ),
+                onChanged: (_) {
+                  if (probeNote != null) setState(() => probeNote = null);
+                },
                 onSubmitted: (_) => _save(),
               ),
               const SizedBox(height: 12),
-              Text('Enter the base URL of your RedChef instance (without trailing slash). We validate via /api/setup/status.',
+              Text('Use the default instance below, or enter another self-hosted RedChef server.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+              const SizedBox(height: 6),
+              Text('We validate the server via /api/setup/status (no trailing slash needed).',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+              if (probingDefault) ...[
+                const SizedBox(height: 12),
+                Row(children: [
+                  const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 8),
+                  Text('Checking the default instance…', style: Theme.of(context).textTheme.bodySmall),
+                ]),
+              ] else if (probeNote != null) ...[
+                const SizedBox(height: 12),
+                Text(probeNote!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+              ],
               const SizedBox(height: 20),
               FilledButton(
                 onPressed: validating ? null : _save,
