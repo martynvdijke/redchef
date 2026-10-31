@@ -1,3 +1,10 @@
+# [1.25.0](https://github.com/martynvdijke/redchef/compare/v1.24.1...v1.25.0) (2026-10-31)
+
+
+### Features
+
+* **mobile:** default to redchef.vandijke.xyz and offer self-hosted option ([f744d19](https://github.com/martynvdijke/redchef/commit/f744d196274e90743695f4b41fa9d67380fd9655))
+
 ## [1.24.1](https://github.com/martynvdijke/redchef/compare/v1.24.0...v1.24.1) (2026-10-27)
 
 
