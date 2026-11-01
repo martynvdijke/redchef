@@ -1,3 +1,10 @@
+## [1.25.3](https://github.com/martynvdijke/redchef/compare/v1.25.2...v1.25.3) (2026-11-01)
+
+
+### Bug Fixes
+
+* **ci:** skip Play Store publish when credentials are missing ([b465da3](https://github.com/martynvdijke/redchef/commit/b465da3f372c28bbef2d4e159d3e4b3c1988c138))
+
 ## [1.25.2](https://github.com/martynvdijke/redchef/compare/v1.25.1...v1.25.2) (2026-10-31)
 
 
