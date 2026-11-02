@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -495,23 +496,69 @@ func UpdateUserPaid(id int64, paid bool) error {
 	return err
 }
 
+// Account deletion errors are exported so HTTP handlers can map them to
+// distinct status codes instead of string-matching.
+var (
+	ErrLastAdmin    = errors.New("cannot delete the last admin user")
+	ErrUserNotFound = errors.New("user not found")
+)
+
+// DeleteUser removes an account and every row that belongs to it. Credentials
+// (sessions, API tokens, password-reset tokens) are revoked first; comments,
+// favourites, tips, purchases and resets are then deleted in the same
+// transaction. There is no foreign-key cascade in SQLite by default, so doing
+// this here prevents orphaned personal data after an account closes.
+//
+// Comments this user wrote are removed with the account, and replies to them
+// are promoted to top-level comments so other people's messages stay visible.
+// Tips and purchases are records of the mock iDEAL flow: no money is ever
+// charged, so no financial-retention obligation applies and they are deleted.
+//
+// The last remaining admin cannot be deleted.
 func DeleteUser(id int64) error {
-	// Prevent deleting the last admin
-	var adminCount int
-	DB.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin' AND id != ?", id).Scan(&adminCount)
-	if adminCount == 0 {
-		return fmt.Errorf("cannot delete the last admin user")
-	}
-	_, err := DB.Exec("DELETE FROM user_sessions WHERE user_id = ?", id)
+	tx, err := DB.Begin()
 	if err != nil {
 		return err
 	}
-	_, err = DB.Exec("DELETE FROM sessions WHERE user_id = ?", id)
-	if err != nil {
+	defer tx.Rollback()
+
+	var role string
+	if err := tx.QueryRow("SELECT role FROM users WHERE id = ?", id).Scan(&role); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrUserNotFound
+		}
 		return err
 	}
-	_, err = DB.Exec("DELETE FROM users WHERE id = ?", id)
-	return err
+	if role == "admin" {
+		var otherAdmins int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin' AND id != ?", id).Scan(&otherAdmins); err != nil {
+			return err
+		}
+		if otherAdmins == 0 {
+			return ErrLastAdmin
+		}
+	}
+
+	// Revoke every credential first, still inside the transaction.
+	steps := []string{
+		"DELETE FROM user_sessions WHERE user_id = ?",
+		"DELETE FROM sessions WHERE user_id = ?",
+		"DELETE FROM api_tokens WHERE user_id = ?",
+		"DELETE FROM password_resets WHERE user_id = ?",
+		// Keep other users' replies visible when their parent comment goes.
+		"UPDATE comments SET parent_id = NULL WHERE parent_id IN (SELECT id FROM comments WHERE user_id = ?)",
+		"DELETE FROM comments WHERE user_id = ?",
+		"DELETE FROM favourites WHERE user_id = ?",
+		"DELETE FROM tips WHERE user_id = ?",
+		"DELETE FROM purchases WHERE user_id = ?",
+		"DELETE FROM users WHERE id = ?",
+	}
+	for _, q := range steps {
+		if _, err := tx.Exec(q, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // ── User Sessions ──

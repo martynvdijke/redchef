@@ -1,0 +1,33 @@
+{{define "layout"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}} — Red Copper Chef</title>
+  <meta name="description" content="{{.Description}}">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍳</text></svg>">
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="/" class="nav-brand">
+      <span class="nav-icon">🍳</span>
+      <span class="nav-name">Red <span>Copper</span> Chef</span>
+    </a>
+    <div class="nav-auth">
+      <a href="/" class="nav-auth-btn nav-auth-btn-outline">Back to site</a>
+    </div>
+  </nav>
+
+  <main class="legal-page">
+    <article class="legal-card">
+      {{template "content" .}}
+    </article>
+  </main>
+
+  <footer class="site-footer legal-footer">
+    <p><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/account/delete">Delete your account</a></p>
+    <p class="disclaimer">Red Copper Chef is a parody fan page. No payments are actually processed.</p>
+  </footer>
+</body>
+</html>{{end}}

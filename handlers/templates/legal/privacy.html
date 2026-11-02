@@ -1,0 +1,85 @@
+{{define "content"}}
+<p class="legal-eyebrow">Legal</p>
+<h1>Privacy policy</h1>
+<p class="legal-lede">What this RedChef instance stores about you, why it stores it, who processes it, and how to get a copy or delete it. Last updated {{.Legal.Year}}.</p>
+
+<h2>1. Who is responsible</h2>
+<p><strong>{{.Legal.Controller}}</strong> operates this RedChef instance and decides how the personal data described here is used. The instance is hosted in {{.Legal.HostingRegion}}.</p>
+{{if .Legal.ContactEmail}}<p>Privacy questions and rights requests: <a href="mailto:{{.Legal.ContactEmail}}">{{.Legal.ContactEmail}}</a>.{{if .Legal.ContactAddress}} Postal address: {{.Legal.ContactAddress}}.{{end}}</p>{{else}}<p>No dedicated privacy address is configured for this instance. Signed-in users can export or delete their own data from the app; otherwise ask the administrator who runs this instance.</p>{{end}}
+
+<h2>2. What is stored</h2>
+<p>RedChef only stores what is needed to run an account, publish posts, and keep the service working.</p>
+<ul>
+  <li><strong>Account details.</strong> Your email address, which is also used as your username, a password hash if you sign in with a password, your role (normal or admin), whether the paid/member flag is set, and the time the account was created.</li>
+  <li><strong>External login.</strong> If you sign in through the configured OpenID Connect provider (Authelia), the provider's subject identifier and verified email are linked to your account. The provider also sees that you signed in.</li>
+  <li><strong>Sign-in state.</strong> A server-side session record and an opaque <code>session_token</code> cookie keep you signed in. The cookie lasts up to 30 days and is removed when you sign out. The session record contains the token, your user ID and the creation time. API tokens you create are stored only as a hash.</li>
+  <li><strong>Technical logs.</strong> The web server logs the request method and path. The hosting provider or reverse proxy may also keep access logs containing your IP address, user agent and timestamps for security, abuse prevention and diagnostics.</li>
+  <li><strong>Comments.</strong> The text you write, the post it belongs to, the reply relationship, and the time it was posted. Comments are shown publicly with the email/username on your account and are available without signing in.</li>
+  <li><strong>Favourites.</strong> Which posts you saved and when. Your list is private to your account, but the total favourite count for a post is shown publicly.</li>
+  <li><strong>Tips and purchases.</strong> If you use the in-app tip or per-post unlock buttons, the post, amount or price in cents, and the time are recorded. <strong>These are mock iDEAL actions: no bank, card or payment provider is contacted, no money is charged, and no financial transaction takes place.</strong> The total tip count for a post is shown publicly.</li>
+  <li><strong>Member status.</strong> The paid/member flag set by the mock subscription or by an administrator.</li>
+  <li><strong>Uploads.</strong> Photos and videos you attach to posts are stored on this server under <code>/uploads/</code>. Posts do not currently store an author, so media is not linked to your account row, but the file itself may identify you.</li>
+  <li><strong>Email and notifications.</strong> If an administrator configured SMTP or Gotify, the address on your account is used to send welcome, reset, tip, purchase and subscription messages, and Gotify may receive a notification about activity.</li>
+  <li><strong>Analytics and telemetry (optional).</strong> If this instance enables Umami, page views are measured with a self-hosted, cookieless script. If OpenTelemetry is configured, request timings, metrics and logs are sent to the operator's collector. Neither is used to build an advertising profile.</li>
+  <li><strong>Password resets.</strong> A hashed reset token and its expiry are stored until the reset is used, expires, or you delete the account.</li>
+</ul>
+
+<h2>3. Why it is stored and on what legal basis</h2>
+<ul>
+  <li><strong>Providing your account and the service</strong> — signing you in, publishing your posts, comments and favourites, and remembering your settings. Legal basis: performance of a contract with you (GDPR Art. 6(1)(b)).</li>
+  <li><strong>Security and abuse prevention</strong> — authentication, rate limiting, debugging and protecting the server. Legal basis: legitimate interests in a secure, working service (Art. 6(1)(f)).</li>
+  <li><strong>Optional analytics and telemetry</strong> — understanding aggregate usage and diagnosing failures. Legal basis: legitimate interests (Art. 6(1)(f)); you may object as described below.</li>
+  <li><strong>Legal obligations</strong> — responding to valid legal requests or keeping records where the law actually requires it. Legal basis: legal obligation (Art. 6(1)(c)). No statutory financial-retention obligation applies to the mock tips and purchases because no payment is processed.</li>
+</ul>
+<p>Providing account details is required to create an account. You can browse public posts without one. There is no automated decision-making or profiling with legal effects.</p>
+
+<h2>4. Who else sees it</h2>
+<p>Your comments are public. Your favourites and full tip/purchase history are visible only to you and administrators; aggregate counts are public. Your email address is not shown on public pages, but it is used as the comment author name, so treat comments as public.</p>
+<p>Processors that may handle data on the operator's behalf, depending on how this instance is configured:</p>
+<ul>
+  <li><strong>Hosting and backup provider</strong> — stores the server, SQLite database, uploads and backups.</li>
+  <li><strong>SMTP email provider</strong> — delivers account and notification email and therefore sees your address and message content.</li>
+  <li><strong>Gotify server</strong> — receives operator notifications about tips and account activity.</li>
+  <li><strong>Umami</strong> — a self-hosted analytics service, if enabled, receives page-view requests.</li>
+  <li><strong>OpenTelemetry collector</strong> — receives request traces, metrics and logs, if enabled.</li>
+  <li><strong>OpenID Connect / Authelia</strong> — authenticates you and returns your subject identifier and verified email.</li>
+</ul>
+<p>Data is not sold, rented, or shared for advertising. Some providers may process data outside the European Economic Area; where that happens, the operator relies on an adequacy decision or standard contractual clauses.</p>
+
+<h2>5. Cookies and tracking</h2>
+<p>The site sets one cookie, <code>session_token</code>, and only after you sign in. It is <code>HttpOnly</code>, <code>SameSite=Lax</code>, and used solely to keep you signed in. It is cleared when you sign out, when you delete your account, or when the server-side session is revoked or expires.</p>
+<p>There are no advertising cookies, cross-site pixels or third-party tracking scripts. Analytics, when enabled, is self-hosted and cookieless. Because no optional tracking cookie is set, this site does not show a consent banner.</p>
+
+<h2>6. How long it is kept</h2>
+<ul>
+  <li><strong>Account data</strong> — until you delete your account.</li>
+  <li><strong>Sessions</strong> — up to 30 days, or sooner when you sign out, reset your password, or delete the account.</li>
+  <li><strong>Password-reset tokens</strong> — until used, expired, or the account is deleted.</li>
+  <li><strong>Comments, favourites, tips and purchases</strong> — until you delete them or close your account. There is no separate financial-retention period because no real payment is made.</li>
+  <li><strong>Server and proxy logs</strong> — for the short period configured by the hosting provider, then rotated or deleted.</li>
+  <li><strong>Backups</strong> — backups taken before a deletion can contain the old data until they are overwritten or expire under the operator's backup schedule. They are not used to restore individual accounts.</li>
+</ul>
+
+<h2>7. Deleting your account</h2>
+<p>Signed-in users can delete their account from the Profile panel on the website (Settings → Delete account) or from Settings → Account → Delete account in the Android app, using the same typed confirmation. The full public instructions are at <a href="/account/delete">/account/delete</a>.</p>
+<p>Deletion revokes every browser session, API token and password reset, then deletes the account row together with the comments, favourites, tips, purchases and resets linked to it. Comments you wrote are removed; replies other people wrote to them are kept as top-level comments. Because comments are public, copies may already have been seen, cached, or included in someone else's export or a backup before deletion.</p>
+<p>If you signed in through Authelia/OIDC, deleting the RedChef account does not delete your identity-provider account. Manage that account with the identity provider separately.</p>
+
+<h2>8. Your rights</h2>
+<ul>
+  <li><strong>Access and portability.</strong> Download a JSON copy from the Profile panel or <code>GET /api/me/export</code>. It contains your profile, comments, favourites, tips, purchases and member status, but no password hash, session token or API token.</li>
+  <li><strong>Rectification.</strong> Ask the operator to correct account details that are wrong.</li>
+  <li><strong>Erasure.</strong> Use <a href="/account/delete">Delete your account</a> or the in-app flow. Deletion is immediate.</li>
+  <li><strong>Restriction and objection.</strong> Ask the operator to restrict processing, or object to processing based on legitimate interests (including optional analytics).</li>
+  <li><strong>Complaint.</strong> You may lodge a complaint with the data protection authority in the country where you live, work, or where the alleged infringement happened.</li>
+</ul>
+<p>Requests that cannot be handled by the self-service pages can be sent to the contact in section 1. The operator answers within one month, as the GDPR requires, and may extend that period for complex requests with notice.</p>
+
+<h2>9. Children</h2>
+<p>This instance is not intended for anyone under 16. Accounts for children under 16 are not knowingly created; if one is discovered it will be deleted.</p>
+
+<h2>10. Changes to this policy</h2>
+<p>Material changes are announced on the site or in the app before they take effect. The date at the top shows the current version.</p>
+
+<p class="legal-muted">See also the <a href="/terms">terms of use</a> and <a href="/account/delete">account deletion instructions</a>.</p>
+{{end}}

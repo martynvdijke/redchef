@@ -59,6 +59,18 @@ func main() {
 	mux.HandleFunc("GET /api/auth/oidc/callback", handlers.OIDCCallback)
 	mux.HandleFunc("GET /api/auth/oidc/logout", handlers.OIDCLogout)
 
+	// Public legal pages — reachable without a session so store reviewers,
+	// prospective users and people locked out of an account can read them.
+	mux.HandleFunc("GET /privacy", handlers.PrivacyPage)
+	mux.HandleFunc("GET /terms", handlers.TermsPage)
+	// Public deletion URL required by Google Play: reachable without a session.
+	mux.HandleFunc("GET /account/delete", handlers.AccountDeletePage)
+
+	// Self-service account export and deletion.
+	mux.Handle("GET /api/me/export", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.ExportMe))))
+	mux.Handle("DELETE /api/me", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.DeleteMe))))
+	mux.Handle("POST /settings/account/delete", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.SettingsDeleteAccount))))
+
 	// Paywall API (session only — API tokens are for the public API, not in-app actions)
 	payMux := http.NewServeMux()
 	payMux.HandleFunc("POST /api/pay/unlock", handlers.PayUnlock)

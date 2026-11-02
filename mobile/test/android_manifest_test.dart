@@ -11,8 +11,8 @@ void main() {
     expect(manifest, contains('android.permission.INTERNET'));
   });
 
-  test('manifest permits self-hosted cleartext HTTP', () {
-    expect(manifest, contains('android:usesCleartextTraffic="true"'));
+  test('manifest disables cleartext HTTP for release builds', () {
+    expect(manifest, contains('android:usesCleartextTraffic="false"'));
   });
 
   test('release build wires key.properties signing with a debug fallback', () {

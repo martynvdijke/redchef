@@ -1,0 +1,44 @@
+{{define "content"}}
+<p class="legal-eyebrow">Account</p>
+<h1>Delete your account</h1>
+<p class="legal-lede">Deletion is immediate. Your account and the data linked to it are removed when you confirm; nothing is held for a waiting period.</p>
+
+<h2>1. Delete it yourself</h2>
+{{if .SignedIn}}
+<p>You are signed in as <strong>{{.Email}}</strong>. Open <strong>Profile</strong> in the top navigation, find <strong>Delete account</strong>, and type your email address to confirm.</p>
+{{else}}
+<p>Sign in, open <strong>Profile</strong> in the top navigation, find <strong>Delete account</strong>, and type your email address to confirm.</p>
+{{end}}
+<p>In the Android app the same action lives under <strong>Settings → Account → Delete account</strong>. It calls the same endpoint with the same typed confirmation.</p>
+
+<h2>2. If you cannot sign in</h2>
+{{if .Legal.ContactEmail}}
+<p>Write to <a href="mailto:{{.Legal.ContactEmail}}">{{.Legal.ContactEmail}}</a> from the address on the account and ask for it to be deleted. The operator may need to verify that you control the address. Requests are handled within one month, usually much sooner.</p>
+{{else}}
+<p>Ask the administrator of this instance to delete the account. They can use the admin tools; there is no self-service route that works without signing in.</p>
+{{end}}
+
+<h2>3. What is deleted</h2>
+<ul>
+  <li>Your email address/username, password hash, member status, role and account creation record.</li>
+  <li>Every way into the account: browser sessions, server-side session records, API tokens and password-reset tokens.</li>
+  <li>Your comments, favourites, tips and purchases.</li>
+  <li>Your link to an external login provider, because the account row that held the OIDC subject is removed.</li>
+</ul>
+
+<h2>4. What happens to public content</h2>
+<p>Comments are public while the account exists. When you delete the account, the comments you wrote are deleted too, and replies other people wrote to them are kept as top-level comments. Copies may already have been seen, cached by search engines or messaging apps, quoted by someone else, or included in a backup taken before deletion.</p>
+<p>Photos and videos attached to posts are stored as files on the server. Posts do not currently record an author, so these files are not deleted automatically with the account. If you need a specific upload removed, ask the operator using the contact above.</p>
+
+<h2>5. What may remain</h2>
+<ul>
+  <li><strong>Backups.</strong> Backups taken before the deletion may contain the old data until they are overwritten or expire under the operator's schedule. They are not used to restore individual accounts.</li>
+  <li><strong>Server and proxy logs.</strong> Access logs containing IP addresses rotate on the hosting provider's schedule.</li>
+  <li><strong>Identity provider.</strong> If you signed in with Authelia/OIDC, your identity-provider account is separate and is not deleted here. Remove it with that provider if you want it gone.</li>
+</ul>
+
+<h2>6. Getting a copy first</h2>
+<p>Signed-in users can download their data from the Profile panel before deleting. The export contains the profile, comments, favourites, tips, purchases and member status, but no password hash, session token or API token.</p>
+
+<p class="legal-muted">The full detail is in the <a href="/privacy">privacy policy</a>.</p>
+{{end}}

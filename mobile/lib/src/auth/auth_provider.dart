@@ -76,6 +76,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await refreshMe();
   }
 
+  Future<void> deleteAccount(String confirm) async {
+    await api.dio.delete('/api/me', data: {'confirm': confirm});
+    await clearWebViewCookies();
+    try { await SecureStore.clearAll(); } catch (_) {}
+    state = AuthState(me: MeResponse(authenticated: false));
+    await refreshMe();
+  }
+
   Future<void> logout() async {
     final wasOidc = await checkOidcEnabled();
     try {

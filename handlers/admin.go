@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -660,7 +661,14 @@ func AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.DeleteUser(id); err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
+		switch {
+		case errors.Is(err, db.ErrLastAdmin):
+			jsonError(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(err, db.ErrUserNotFound):
+			jsonError(w, err.Error(), http.StatusNotFound)
+		default:
+			jsonError(w, "failed to delete user", http.StatusInternalServerError)
+		}
 		return
 	}
 
