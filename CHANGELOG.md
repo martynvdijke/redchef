@@ -1,3 +1,10 @@
+# [1.26.0](https://github.com/martynvdijke/redchef/compare/v1.25.3...v1.26.0) (2026-11-02)
+
+
+### Features
+
+* **legal:** GDPR/Play compliance for RedChef ([840515f](https://github.com/martynvdijke/redchef/commit/840515ff7d1b48dd361b49ca7cb3abde6c2bdcd1))
+
 ## [1.25.3](https://github.com/martynvdijke/redchef/compare/v1.25.2...v1.25.3) (2026-11-01)
 
 
