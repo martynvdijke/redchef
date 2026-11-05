@@ -1,3 +1,10 @@
+# [1.27.0](https://github.com/martynvdijke/redchef/compare/v1.26.0...v1.27.0) (2026-11-05)
+
+
+### Features
+
+* **legal:** Play data deletion, demo user and GDPR compliance ([943e8e3](https://github.com/martynvdijke/redchef/commit/943e8e3db69ae7a5bddf02944aa8624e65062454))
+
 # [1.26.0](https://github.com/martynvdijke/redchef/compare/v1.25.3...v1.26.0) (2026-11-02)
 
 
