@@ -36,6 +36,10 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// Seed or repair the shared demo account when the feature is enabled.
+	// Failures are logged inside the handler and never block startup.
+	handlers.EnsureDemoUser()
+
 	mux := http.NewServeMux()
 
 	// Static file server for uploads
@@ -53,6 +57,7 @@ func main() {
 	mux.HandleFunc("POST /api/auth/logout", handlers.Logout)
 	mux.HandleFunc("POST /api/auth/forgot", handlers.ForgotPassword)
 	mux.HandleFunc("POST /api/auth/reset", handlers.ResetPassword)
+	mux.HandleFunc("GET /api/auth/config", handlers.DemoConfigHandler)
 	mux.Handle("GET /api/auth/me", handlers.AuthMiddleware(http.HandlerFunc(handlers.Me)))
 	mux.HandleFunc("GET /api/auth/oidc/status", handlers.OIDCStatus)
 	mux.HandleFunc("GET /api/auth/oidc/login", handlers.OIDCLogin)
@@ -64,7 +69,11 @@ func main() {
 	mux.HandleFunc("GET /privacy", handlers.PrivacyPage)
 	mux.HandleFunc("GET /terms", handlers.TermsPage)
 	// Public deletion URL required by Google Play: reachable without a session.
-	mux.HandleFunc("GET /account/delete", handlers.AccountDeletePage)
+	// The POST handler is the web pathway for people who cannot sign in.
+	// AuthMiddleware does not require a session; it only resolves one when
+	// present so the page can offer the signed-in deletion form.
+	mux.Handle("GET /account/delete", handlers.AuthMiddleware(http.HandlerFunc(handlers.AccountDeletePage)))
+	mux.Handle("POST /account/delete", handlers.AuthMiddleware(http.HandlerFunc(handlers.RequestAccountDeletion)))
 
 	// Self-service account export and deletion.
 	mux.Handle("GET /api/me/export", handlers.AuthMiddleware(handlers.RequireAuth(http.HandlerFunc(handlers.ExportMe))))

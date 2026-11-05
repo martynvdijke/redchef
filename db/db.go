@@ -399,6 +399,72 @@ func CreateUser(email, password string) (int64, error) {
 	return res.LastInsertId()
 }
 
+// EnsureDemoUser creates or repairs the shared demo account.
+// Returns whether a new account was created.
+//
+// The demo account is advertised publicly so store reviewers and visitors can
+// try the app. It is deliberately never an admin: an admin account is left
+// untouched and reported as an error, and on a fresh install (no users yet)
+// nothing is created so the first real account still completes setup.
+func EnsureDemoUser(email, password string) (bool, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return false, errors.New("demo email is required")
+	}
+	if password == "" {
+		return false, errors.New("demo password is required")
+	}
+	if len(password) < 6 {
+		return false, errors.New("demo password must be at least 6 characters")
+	}
+
+	user, err := GetUserByEmail(email)
+	if err == nil {
+		// Only repair the demo row. Refuse to take over an admin or a real
+		// member account that happens to use the configured demo address.
+		if user.Role != "demo" {
+			return false, fmt.Errorf("refusing to convert %q account into the demo account", user.Role)
+		}
+		if _, err := DB.Exec(
+			"UPDATE users SET username = ?, role = 'demo', paid = 1 WHERE id = ?",
+			email, user.ID,
+		); err != nil {
+			return false, err
+		}
+		if !CheckPassword(password, user.PasswordHash) {
+			if err := UpdateUserPassword(user.ID, password); err != nil {
+				return false, err
+			}
+		}
+		return false, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+
+	// On a fresh install the next account created must be the first admin, so
+	// never let the demo seed claim that slot.
+	var count int
+	if err := DB.QueryRow("SELECT COUNT(*) FROM users").Scan(&count); err != nil {
+		return false, err
+	}
+	if count == 0 {
+		return false, nil
+	}
+
+	hash, err := hashPassword(password)
+	if err != nil {
+		return false, err
+	}
+	if _, err := DB.Exec(
+		"INSERT INTO users (username, password_hash, email, role, paid) VALUES (?, ?, ?, 'demo', 1)",
+		email, hash, email,
+	); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func GetUserByEmail(email string) (*User, error) {
 	u := &User{}
 	var paidInt int

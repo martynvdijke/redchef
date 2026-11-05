@@ -1,13 +1,25 @@
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../auth/auth_provider.dart';
 
-class AccountScreen extends ConsumerWidget {
+class AccountScreen extends ConsumerStatefulWidget {
   const AccountScreen({super.key});
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends ConsumerState<AccountScreen> {
+  bool _exporting = false;
+
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final scheme = Theme.of(context).colorScheme;
     final base = ref.watch(apiClientProvider).baseUrl ?? '—';
@@ -38,6 +50,15 @@ class AccountScreen extends ConsumerWidget {
           const Divider(),
           ListTile(leading: const Icon(Icons.privacy_tip_outlined), title: const Text('Privacy policy'), onTap: () => _open('$base/privacy')),
           ListTile(leading: const Icon(Icons.description_outlined), title: const Text('Terms of use'), onTap: () => _open('$base/terms')),
+          ListTile(
+            leading: _exporting
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.download_outlined),
+            title: const Text('Download my data'),
+            subtitle: const Text('Export your profile, comments, favourites, tips and purchases'),
+            enabled: !_exporting,
+            onTap: _exporting ? null : _exportAccount,
+          ),
           ListTile(leading: const Icon(Icons.delete_forever_outlined, color: Colors.red), title: const Text('Delete account', style: TextStyle(color: Colors.red)), subtitle: const Text('Permanently close your account'), onTap: () => _deleteAccount(context, ref, auth.me?.email)),
           const Divider(),
           ListTile(leading: const Icon(Icons.link_outlined), title: const Text('Change server'), onTap: () => context.go('/onboarding')),
@@ -52,6 +73,61 @@ class AccountScreen extends ConsumerWidget {
     final uri = Uri.tryParse(url);
     if (uri != null) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _exportAccount() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final json = await ref.read(apiClientProvider).exportAccount();
+      if (!mounted) return;
+      setState(() => _exporting = false);
+      final bytes = utf8.encode(json).length;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('My data'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 360,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${json.length} characters · $bytes bytes', style: Theme.of(ctx).textTheme.bodySmall),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: SelectableText(json, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: json));
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
+                }
+              },
+              child: const Text('Copy'),
+            ),
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
+          ],
+        ),
+      );
+    } on DioException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not export data: ${e.message}')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not export data: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 

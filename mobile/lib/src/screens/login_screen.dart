@@ -19,16 +19,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _oidcBusy = false;
   String? error;
   bool oidcEnabled = false;
+  bool demoEnabled = false;
+  String? demoEmail;
+  String? demoPassword;
 
   @override
   void initState() {
     super.initState();
     _checkOidc();
+    _checkDemoConfig();
   }
 
   Future<void> _checkOidc() async {
     final v = await ref.read(authProvider.notifier).checkOidcEnabled();
     if (mounted) setState(() => oidcEnabled = v);
+  }
+
+  Future<void> _checkDemoConfig() async {
+    final demo = await ref.read(apiClientProvider).fetchDemoConfig();
+    if (!mounted || !demo.enabled) return;
+    setState(() {
+      demoEnabled = true;
+      demoEmail = demo.email;
+      demoPassword = demo.password;
+    });
   }
 
   Future<void> _login() async {
@@ -129,6 +143,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               onPressed: loading ? null : _login,
               child: loading ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Log in'),
             ),
+            if (demoEnabled) ...[
+              const SizedBox(height: 12),
+              Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Shared demo account', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                      if (demoEmail != null) ...[
+                        const SizedBox(height: 4),
+                        Text(demoEmail!, style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.tonal(
+                          onPressed: loading
+                              ? null
+                              : () {
+                                  setState(() => error = null);
+                                  emailCtrl.text = demoEmail ?? '';
+                                  passCtrl.text = demoPassword ?? '';
+                                  _login();
+                                },
+                          child: const Text('Use demo account'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => context.push('/forgot'), child: const Text('Forgot password?'))),
             const SizedBox(height: 6),
             OutlinedButton(onPressed: () => context.go('/register'), child: const Text('Create account')),

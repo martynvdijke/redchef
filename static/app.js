@@ -2,6 +2,7 @@
 
 const API = {
   me: '/api/auth/me',
+  authConfig: '/api/auth/config',
   login: '/api/auth/login',
   register: '/api/auth/register',
   logout: '/api/auth/logout',
@@ -53,6 +54,33 @@ async function checkOIDC() {
     const wrap = document.getElementById('oidc-login-wrap');
     if (wrap) wrap.style.display = data.enabled ? 'block' : 'none';
   } catch (_) {}
+}
+
+// Demo login is opt-in on the server; never hardcode credentials here.
+let demoConfig = null;
+
+async function checkDemoConfig() {
+  try {
+    const res = await fetch(API.authConfig);
+    const data = await res.json();
+    const demo = data && data.demo;
+    if (!demo || !demo.enabled || !demo.email || !demo.password) return;
+    demoConfig = { email: demo.email, password: demo.password };
+    const wrap = $('demo-login-wrap');
+    const hint = $('demo-login-hint');
+    if (hint) hint.textContent = 'Email: ' + demo.email;
+    if (wrap) wrap.style.display = 'block';
+  } catch (_) {
+    // Self-hosted instances without a demo account: stay hidden.
+  }
+}
+
+function useDemoLogin() {
+  if (!demoConfig) return;
+  $('login-error').textContent = '';
+  $('login-email').value = demoConfig.email;
+  $('login-password').value = demoConfig.password;
+  $('login-form').requestSubmit();
 }
 
 async function checkAuth() {
@@ -1233,6 +1261,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === e.currentTarget) closeLoginModal();
   });
   $('login-form').addEventListener('submit', handleLogin);
+  $('btn-demo-login').addEventListener('click', useDemoLogin);
 
   // Register modal
   $('register-modal-close').addEventListener('click', closeRegisterModal);
@@ -1314,6 +1343,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load
   checkOIDC();
+  checkDemoConfig();
   checkAuth().then(loadContent);
 });
 

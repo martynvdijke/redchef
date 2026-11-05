@@ -1,24 +1,49 @@
 {{define "content"}}
 <p class="legal-eyebrow">Account</p>
-<h1>Delete your account</h1>
+<h1 id="data-deletion">Delete your account</h1>
+{{if .Deleted}}
+<div class="legal-success" role="status" style="border:1px solid #2e7d32;background:#edf7ed;padding:1rem 1.25rem;border-radius:.5rem;margin:1.25rem 0;">
+  <h2 style="margin-top:0;">Your account has been deleted.</h2>
+  <p>The account and the personal data linked to it have been removed. You have been signed out on this device.</p>
+  <p><a href="/">Back to the site</a> · <a href="/privacy">Privacy policy</a></p>
+</div>
+{{else}}
 <p class="legal-lede">Deletion is immediate. Your account and the data linked to it are removed when you confirm; nothing is held for a waiting period.</p>
 
-<h2>1. Delete it yourself</h2>
+<h2 id="delete-without-signing-in">1. Delete without signing in</h2>
+<p>You do not need the app or an active session. Enter the email address on your account, your current password, and type the same email address again to confirm. Deletion happens immediately and cannot be undone, so <a href="/api/me/export">export a copy of your data</a> first if you want one.</p>
+<form method="post" action="/account/delete" autocomplete="off">
+  <p>
+    <label for="delete-email">Email address</label><br>
+    <input id="delete-email" type="email" name="email" required autocomplete="username">
+  </p>
+  <p>
+    <label for="delete-password">Password</label><br>
+    <input id="delete-password" type="password" name="password" required autocomplete="current-password">
+  </p>
+  <p>
+    <label for="delete-confirm">Type your email address again to confirm</label><br>
+    <input id="delete-confirm" type="text" name="confirm" required autocomplete="off">
+  </p>
+  <p><button type="submit">Delete my account permanently</button></p>
+</form>
+<p class="legal-muted">The shared demo account cannot be deleted, so public reviewers always have something to test.</p>
+
 {{if .SignedIn}}
-<p>You are signed in as <strong>{{.Email}}</strong>. Open <strong>Profile</strong> in the top navigation, find <strong>Delete account</strong>, and type your email address to confirm.</p>
+<h2 id="delete-while-signed-in">2. Delete while signed in</h2>
+<p>You are signed in, so you only need to type the email address on your account. The password field above is ignored for a signed-in session.</p>
+<form method="post" action="/account/delete" autocomplete="off">
+  <p>
+    <label for="delete-confirm-signed-in">Type your email address to confirm</label><br>
+    <input id="delete-confirm-signed-in" type="text" name="confirm" required autocomplete="off">
+  </p>
+  <p><button type="submit">Delete my account permanently</button></p>
+</form>
 {{else}}
-<p>Sign in, open <strong>Profile</strong> in the top navigation, find <strong>Delete account</strong>, and type your email address to confirm.</p>
-{{end}}
-<p>In the Android app the same action lives under <strong>Settings → Account → Delete account</strong>. It calls the same endpoint with the same typed confirmation.</p>
-
-<h2>2. If you cannot sign in</h2>
-{{if .Legal.ContactEmail}}
-<p>Write to <a href="mailto:{{.Legal.ContactEmail}}">{{.Legal.ContactEmail}}</a> from the address on the account and ask for it to be deleted. The operator may need to verify that you control the address. Requests are handled within one month, usually much sooner.</p>
-{{else}}
-<p>Ask the administrator of this instance to delete the account. They can use the admin tools; there is no self-service route that works without signing in.</p>
+<p>If you cannot use this form because you no longer have access to the account's email address, use the contact fallback in section 7.</p>
 {{end}}
 
-<h2>3. What is deleted</h2>
+<h2 id="what-is-deleted">3. What is deleted</h2>
 <ul>
   <li>Your email address/username, password hash, member status, role and account creation record.</li>
   <li>Every way into the account: browser sessions, server-side session records, API tokens and password-reset tokens.</li>
@@ -26,19 +51,28 @@
   <li>Your link to an external login provider, because the account row that held the OIDC subject is removed.</li>
 </ul>
 
-<h2>4. What happens to public content</h2>
+<h2 id="public-content">4. What happens to public content</h2>
 <p>Comments are public while the account exists. When you delete the account, the comments you wrote are deleted too, and replies other people wrote to them are kept as top-level comments. Copies may already have been seen, cached by search engines or messaging apps, quoted by someone else, or included in a backup taken before deletion.</p>
-<p>Photos and videos attached to posts are stored as files on the server. Posts do not currently record an author, so these files are not deleted automatically with the account. If you need a specific upload removed, ask the operator using the contact above.</p>
+<p>Photos and videos attached to posts are stored as files on the server. Posts do not currently record an author, so these files are not deleted automatically with the account. If you need a specific upload removed, ask the operator using the contact in section 7.</p>
 
-<h2>5. What may remain</h2>
+<h2 id="what-may-remain">5. What may remain</h2>
 <ul>
   <li><strong>Backups.</strong> Backups taken before the deletion may contain the old data until they are overwritten or expire under the operator's schedule. They are not used to restore individual accounts.</li>
   <li><strong>Server and proxy logs.</strong> Access logs containing IP addresses rotate on the hosting provider's schedule.</li>
   <li><strong>Identity provider.</strong> If you signed in with Authelia/OIDC, your identity-provider account is separate and is not deleted here. Remove it with that provider if you want it gone.</li>
 </ul>
+<p>Deletion from the live service is immediate. Residual copies in backups are removed on the operator's normal rotation schedule, and any request handled by the operator is answered within one month at the latest.</p>
 
-<h2>6. Getting a copy first</h2>
-<p>Signed-in users can download their data from the Profile panel before deleting. The export contains the profile, comments, favourites, tips, purchases and member status, but no password hash, session token or API token.</p>
+<h2 id="export-first">6. Getting a copy first</h2>
+<p>Signed-in users can download their data from the Profile panel or from <a href="/api/me/export">/api/me/export</a> before deleting. The export contains the profile, comments, favourites, tips, purchases and member status, but no password hash, session token or API token.</p>
+
+<h2 id="contact-fallback">7. If you need help</h2>
+{{if .Legal.ContactEmail}}
+<p>The form above is the fastest route and normally deletes the account immediately. If you cannot use it, write to <a href="mailto:{{.Legal.ContactEmail}}">{{.Legal.ContactEmail}}</a> from the address on the account and ask for it to be deleted. The operator may need to verify that you control the address. Requests are handled within one month, usually much sooner.</p>
+{{else}}
+<p>The form above is the fastest route and normally deletes the account immediately. If you cannot use it, ask the administrator of this instance to delete the account using the admin tools.</p>
+{{end}}
+{{end}}
 
 <p class="legal-muted">The full detail is in the <a href="/privacy">privacy policy</a>.</p>
 {{end}}

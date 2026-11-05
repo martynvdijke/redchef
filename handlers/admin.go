@@ -660,6 +660,15 @@ func AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user, err := db.GetUserByID(id)
+	if err != nil {
+		jsonError(w, "user not found", http.StatusNotFound)
+		return
+	}
+	if demoDeletionBlocked(w, user, false) {
+		return
+	}
+
 	if err := db.DeleteUser(id); err != nil {
 		switch {
 		case errors.Is(err, db.ErrLastAdmin):
@@ -897,6 +906,10 @@ func Setup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setSessionCookie(w, r, session.Token)
+
+	// A fresh official instance now has its first user; seed the shared demo
+	// account immediately instead of waiting for the next restart.
+	EnsureDemoUser()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

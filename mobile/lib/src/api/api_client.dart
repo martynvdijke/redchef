@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import '../auth/storage.dart';
 
@@ -108,6 +110,38 @@ class ApiClient {
     try {
       await SecureStore.setCookie(value);
     } catch (_) {}
+  }
+
+  /// Fetches public auth configuration. Returns a disabled result when the
+  /// server hides/does not offer demo access or cannot be reached.
+  Future<({bool enabled, String? email, String? password})> fetchDemoConfig() async {
+    try {
+      final r = await dio.get('/api/auth/config', options: Options(validateStatus: (_) => true));
+      if (r.statusCode != 200 || r.data is! Map) {
+        return (enabled: false, email: null, password: null);
+      }
+      final demo = (r.data as Map)['demo'];
+      if (demo is! Map || demo['enabled'] != true) {
+        return (enabled: false, email: null, password: null);
+      }
+      final email = demo['email']?.toString();
+      final password = demo['password']?.toString();
+      if (email == null || email.isEmpty || password == null || password.isEmpty) {
+        return (enabled: false, email: null, password: null);
+      }
+      return (enabled: true, email: email, password: password);
+    } catch (_) {
+      return (enabled: false, email: null, password: null);
+    }
+  }
+
+  /// Downloads the authenticated user's data export as a JSON string.
+  Future<String> exportAccount() async {
+    final r = await dio.get('/api/me/export', options: Options(responseType: ResponseType.plain));
+    final data = r.data;
+    if (data is String) return data;
+    if (data is Map || data is List) return jsonEncode(data);
+    return data?.toString() ?? '';
   }
 
   String resolveMedia(String? mediaUrl) {

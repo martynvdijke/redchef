@@ -4,7 +4,9 @@
 <p class="legal-lede">What this RedChef instance stores about you, why it stores it, who processes it, and how to get a copy or delete it. Last updated {{.Legal.Year}}.</p>
 
 <h2>1. Who is responsible</h2>
-<p><strong>{{.Legal.Controller}}</strong> operates this RedChef instance and decides how the personal data described here is used. The instance is hosted in {{.Legal.HostingRegion}}.</p>
+<p><strong>{{.Legal.Controller}}</strong> operates this RedChef instance and is the data controller for the personal data described here. The instance is hosted in {{.Legal.HostingRegion}}.</p>
+{{if .Legal.EURepresentative}}<p><strong>EU representative (GDPR Art. 27):</strong> {{.Legal.EURepresentative}}.</p>{{end}}
+{{if .Legal.DPOEmail}}<p><strong>Data protection officer:</strong> <a href="mailto:{{.Legal.DPOEmail}}">{{.Legal.DPOEmail}}</a>.</p>{{end}}
 {{if .Legal.ContactEmail}}<p>Privacy questions and rights requests: <a href="mailto:{{.Legal.ContactEmail}}">{{.Legal.ContactEmail}}</a>.{{if .Legal.ContactAddress}} Postal address: {{.Legal.ContactAddress}}.{{end}}</p>{{else}}<p>No dedicated privacy address is configured for this instance. Signed-in users can export or delete their own data from the app; otherwise ask the administrator who runs this instance.</p>{{end}}
 
 <h2>2. What is stored</h2>
@@ -30,6 +32,7 @@
   <li><strong>Security and abuse prevention</strong> — authentication, rate limiting, debugging and protecting the server. Legal basis: legitimate interests in a secure, working service (Art. 6(1)(f)).</li>
   <li><strong>Optional analytics and telemetry</strong> — understanding aggregate usage and diagnosing failures. Legal basis: legitimate interests (Art. 6(1)(f)); you may object as described below.</li>
   <li><strong>Legal obligations</strong> — responding to valid legal requests or keeping records where the law actually requires it. Legal basis: legal obligation (Art. 6(1)(c)). No statutory financial-retention obligation applies to the mock tips and purchases because no payment is processed.</li>
+  <li><strong>Consent</strong> — where an optional feature is offered only with your consent, that consent (Art. 6(1)(a)) is the basis; you can withdraw it at any time and the processing stops for the future.</li>
 </ul>
 <p>Providing account details is required to create an account. You can browse public posts without one. There is no automated decision-making or profiling with legal effects.</p>
 
@@ -44,25 +47,27 @@
   <li><strong>OpenTelemetry collector</strong> — receives request traces, metrics and logs, if enabled.</li>
   <li><strong>OpenID Connect / Authelia</strong> — authenticates you and returns your subject identifier and verified email.</li>
 </ul>
-<p>Data is not sold, rented, or shared for advertising. Some providers may process data outside the European Economic Area; where that happens, the operator relies on an adequacy decision or standard contractual clauses.</p>
+<p>Data is not sold, rented, or shared for advertising. Data is processed within the European Economic Area where possible. Where a provider processes data outside the EEA, the operator relies on an adequacy decision or on standard contractual clauses approved by the European Commission, together with any supplementary measures the provider offers.</p>
 
 <h2>5. Cookies and tracking</h2>
-<p>The site sets one cookie, <code>session_token</code>, and only after you sign in. It is <code>HttpOnly</code>, <code>SameSite=Lax</code>, and used solely to keep you signed in. It is cleared when you sign out, when you delete your account, or when the server-side session is revoked or expires.</p>
+<p>The site sets one cookie for normal use, <code>session_token</code>, and only after you sign in. It is <code>HttpOnly</code>, <code>SameSite=Lax</code>, and used solely to keep you signed in. It is cleared when you sign out, when you delete your account, or when the server-side session is revoked or expires.</p>
+<p>An older <code>admin_token</code> cookie may still exist from a previous version of the admin interface. It is a legacy sign-in cookie, also <code>HttpOnly</code> and <code>SameSite=Lax</code>, and is removed when you sign out or when it is replaced by the current session mechanism.</p>
 <p>There are no advertising cookies, cross-site pixels or third-party tracking scripts. Analytics, when enabled, is self-hosted and cookieless. Because no optional tracking cookie is set, this site does not show a consent banner.</p>
 
 <h2>6. How long it is kept</h2>
 <ul>
   <li><strong>Account data</strong> — until you delete your account.</li>
   <li><strong>Sessions</strong> — up to 30 days, or sooner when you sign out, reset your password, or delete the account.</li>
-  <li><strong>Password-reset tokens</strong> — until used, expired, or the account is deleted.</li>
+  <li><strong>Password-reset tokens</strong> — one hour, or sooner when used or the account is deleted.</li>
   <li><strong>Comments, favourites, tips and purchases</strong> — until you delete them or close your account. There is no separate financial-retention period because no real payment is made.</li>
   <li><strong>Server and proxy logs</strong> — for the short period configured by the hosting provider, then rotated or deleted.</li>
   <li><strong>Backups</strong> — backups taken before a deletion can contain the old data until they are overwritten or expire under the operator's backup schedule. They are not used to restore individual accounts.</li>
 </ul>
 
-<h2>7. Deleting your account</h2>
-<p>Signed-in users can delete their account from the Profile panel on the website (Settings → Delete account) or from Settings → Account → Delete account in the Android app, using the same typed confirmation. The full public instructions are at <a href="/account/delete">/account/delete</a>.</p>
-<p>Deletion revokes every browser session, API token and password reset, then deletes the account row together with the comments, favourites, tips, purchases and resets linked to it. Comments you wrote are removed; replies other people wrote to them are kept as top-level comments. Because comments are public, copies may already have been seen, cached, or included in someone else's export or a backup before deletion.</p>
+<h2 id="data-deletion">7. Data deletion</h2>
+<p>You can delete your account and its data yourself at <a href="/account/delete">/account/delete</a>, without installing the app and without needing a working session. Signed-in users can also use the Profile panel (Settings → Delete account) or Settings → Account → Delete account in the Android app.</p>
+<p>Deletion is immediate and irreversible. It revokes every browser session, API token and password reset, then deletes the account row together with the comments, favourites, tips, purchases and resets linked to it. Comments you wrote are removed; replies other people wrote to them are kept as top-level comments. Because comments are public, copies may already have been seen, cached, or included in someone else's export or a backup before deletion.</p>
+<p>Residual copies in backups are removed as the backups rotate. If you cannot use the self-service route, send a deletion request to the contact in section 1. Requests are actioned within one month at the latest, and normally immediately. The shared demo account shown for public review cannot be deleted.</p>
 <p>If you signed in through Authelia/OIDC, deleting the RedChef account does not delete your identity-provider account. Manage that account with the identity provider separately.</p>
 
 <h2>8. Your rights</h2>
@@ -71,11 +76,13 @@
   <li><strong>Rectification.</strong> Ask the operator to correct account details that are wrong.</li>
   <li><strong>Erasure.</strong> Use <a href="/account/delete">Delete your account</a> or the in-app flow. Deletion is immediate.</li>
   <li><strong>Restriction and objection.</strong> Ask the operator to restrict processing, or object to processing based on legitimate interests (including optional analytics).</li>
-  <li><strong>Complaint.</strong> You may lodge a complaint with the data protection authority in the country where you live, work, or where the alleged infringement happened.</li>
+  <li><strong>Withdraw consent.</strong> Where processing rests on consent, you can withdraw it at any time without affecting processing that already happened.</li>
+  <li><strong>Complaint.</strong> You may lodge a complaint with {{.Legal.SupervisoryAuthority}}, or with the authority in the country where you live, work, or where the alleged infringement happened.</li>
 </ul>
 <p>Requests that cannot be handled by the self-service pages can be sent to the contact in section 1. The operator answers within one month, as the GDPR requires, and may extend that period for complex requests with notice.</p>
 
-<h2>9. Children</h2>
+<h2>9. Automated decisions and children</h2>
+<p>There is no automated decision-making or profiling that produces legal effects or similarly significantly affects you.</p>
 <p>This instance is not intended for anyone under 16. Accounts for children under 16 are not knowingly created; if one is discovered it will be deleted.</p>
 
 <h2>10. Changes to this policy</h2>

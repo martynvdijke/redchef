@@ -25,6 +25,9 @@ func DeleteMe(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "user not found", http.StatusNotFound)
 		return
 	}
+	if demoDeletionBlocked(w, user, false) {
+		return
+	}
 
 	var req struct {
 		Confirm string `json:"confirm"`
@@ -61,6 +64,9 @@ func SettingsDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "user not found", http.StatusNotFound)
 		return
 	}
+	if demoDeletionBlocked(w, user, true) {
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
@@ -83,6 +89,72 @@ func SettingsDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	clearSessionCookie(w, r)
 	http.Redirect(w, r, "/?deleted=1", http.StatusSeeOther)
+}
+
+// RequestAccountDeletion is the public web deletion pathway required by Google
+// Play: a person who cannot open the app can still delete their account here.
+//
+// Signed-in visitors confirm with the email address on their account and the
+// password is ignored. Signed-out visitors must prove ownership with the email
+// and password. Both paths use the same generic wording so the endpoint cannot
+// be used to discover whether an address has an account.
+func RequestAccountDeletion(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+
+	confirm := strings.TrimSpace(r.FormValue("confirm"))
+	var user *db.User
+
+	if userID := getUserID(r); userID > 0 {
+		loaded, err := db.GetUserByID(userID)
+		if err != nil {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		user = loaded
+		if !strings.EqualFold(confirm, strings.TrimSpace(user.Email)) {
+			http.Error(w, "type your email address to confirm deletion", http.StatusBadRequest)
+			return
+		}
+	} else {
+		email := strings.ToLower(strings.TrimSpace(r.FormValue("email")))
+		password := r.FormValue("password")
+		if email == "" || password == "" {
+			http.Error(w, "email or password is incorrect", http.StatusBadRequest)
+			return
+		}
+		loaded, err := db.GetUserByEmail(email)
+		if err != nil || loaded == nil || !db.CheckPassword(password, loaded.PasswordHash) {
+			http.Error(w, "email or password is incorrect", http.StatusBadRequest)
+			return
+		}
+		user = loaded
+		if !strings.EqualFold(confirm, strings.TrimSpace(user.Email)) {
+			http.Error(w, "type your email address to confirm deletion", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if demoDeletionBlocked(w, user, true) {
+		return
+	}
+
+	if err := db.DeleteUser(user.ID); err != nil {
+		switch {
+		case errors.Is(err, db.ErrLastAdmin):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(err, db.ErrUserNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		default:
+			http.Error(w, "failed to delete account", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	clearSessionCookie(w, r)
+	http.Redirect(w, r, "/account/delete?deleted=1", http.StatusSeeOther)
 }
 
 func writeDeleteError(w http.ResponseWriter, err error) {

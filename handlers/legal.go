@@ -14,17 +14,23 @@ import (
 //go:embed templates/legal/*.html
 var legalTemplateFS embed.FS
 
-var legalTemplates = template.Must(template.ParseFS(legalTemplateFS, "templates/legal/*.html"))
+// legalLayout is parsed once. Each page file defines its own "content", so it
+// must be parsed into a clone of the layout rather than into a shared set where
+// the last file parsed would win for every page.
+var legalLayout = template.Must(template.ParseFS(legalTemplateFS, "templates/legal/layout.html"))
 
 // LegalData is the operator identity published on the public legal pages.
 // Every value comes from configuration; nothing here is read from an account.
 type LegalData struct {
-	Controller     string
-	ContactEmail   string
-	ContactAddress string
-	HostingRegion  string
-	BaseURL        string
-	Year           int
+	Controller           string
+	ContactEmail         string
+	ContactAddress       string
+	EURepresentative     string
+	DPOEmail             string
+	SupervisoryAuthority string
+	HostingRegion        string
+	BaseURL              string
+	Year                 int
 }
 
 // legalData reads the LEGAL_* environment once per request. Missing values
@@ -32,10 +38,11 @@ type LegalData struct {
 // the default deployment, and no invented contact address.
 func legalData() LegalData {
 	d := LegalData{
-		Controller:    "The operator of this RedChef instance",
-		HostingRegion: "the European Union",
-		BaseURL:       "https://redchef.vandijke.xyz",
-		Year:          time.Now().UTC().Year(),
+		Controller:           "The operator of this RedChef instance",
+		SupervisoryAuthority: "the data protection authority in your EU/EEA country of residence",
+		HostingRegion:        "the European Union",
+		BaseURL:              "https://redchef.vandijke.xyz",
+		Year:                 time.Now().UTC().Year(),
 	}
 	if v := strings.TrimSpace(os.Getenv("LEGAL_CONTROLLER_NAME")); v != "" {
 		d.Controller = v
@@ -45,6 +52,15 @@ func legalData() LegalData {
 	}
 	if v := strings.TrimSpace(os.Getenv("LEGAL_CONTACT_ADDRESS")); v != "" {
 		d.ContactAddress = v
+	}
+	if v := strings.TrimSpace(os.Getenv("LEGAL_EU_REPRESENTATIVE")); v != "" {
+		d.EURepresentative = v
+	}
+	if v := strings.TrimSpace(os.Getenv("LEGAL_DPO_EMAIL")); v != "" {
+		d.DPOEmail = v
+	}
+	if v := strings.TrimSpace(os.Getenv("LEGAL_SUPERVISORY_AUTHORITY")); v != "" {
+		d.SupervisoryAuthority = v
 	}
 	if v := strings.TrimSpace(os.Getenv("LEGAL_HOSTING_REGION")); v != "" {
 		d.HostingRegion = v
@@ -61,13 +77,26 @@ type legalPageData struct {
 	Description string
 	SignedIn    bool
 	Email       string
+	Deleted     bool
 }
 
 func renderLegal(w http.ResponseWriter, status int, page string, data legalPageData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if err := legalTemplates.ExecuteTemplate(w, "layout", data); err != nil {
+	tmpl, err := legalLayout.Clone()
+	if err != nil {
+		http.Error(w, "could not render legal page", http.StatusInternalServerError)
+		return
+	}
+	raw, err := legalTemplateFS.ReadFile("templates/legal/" + page + ".html")
+	if err == nil {
+		_, err = tmpl.Parse(string(raw))
+	}
+	if err == nil {
+		err = tmpl.ExecuteTemplate(w, "layout", data)
+	}
+	if err != nil {
 		// The template is compiled at startup; an execution error means the
 		// response is already partially written, so only log-worthy failure.
 		http.Error(w, "could not render legal page", http.StatusInternalServerError)
@@ -102,6 +131,7 @@ func AccountDeletePage(w http.ResponseWriter, r *http.Request) {
 		Legal:    legalData(),
 		Title:    "Delete your account",
 		SignedIn: getUserID(r) > 0,
+		Deleted:  r.URL.Query().Get("deleted") == "1",
 	}
 	if data.SignedIn {
 		if user, err := db.GetUserByID(getUserID(r)); err == nil {

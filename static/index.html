@@ -123,6 +123,11 @@
         <button type="submit" class="btn-primary">Sign In</button>
         <div class="auth-error" id="login-error"></div>
       </form>
+      <div id="demo-login-wrap" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-light);text-align:center;">
+        <p class="auth-subtitle" style="margin-bottom:6px;">Shared demo account for trying RedChef.</p>
+        <p id="demo-login-hint" class="auth-subtitle" style="margin-bottom:8px;font-size:0.8rem;"></p>
+        <button type="button" id="btn-demo-login" class="btn-primary">Use demo account</button>
+      </div>
       <div id="oidc-login-wrap" style="display:none;text-align:center;margin-top:12px;">
         <a href="/api/auth/oidc/login" class="btn-primary" style="display:inline-flex;text-decoration:none;justify-content:center;width:100%;">Login with Authelia</a>
       </div>
