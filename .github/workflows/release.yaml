@@ -153,6 +153,17 @@ jobs:
           cd mobile
           flutter build apk --release
 
+      - name: Verify APK contains MainActivity
+        run: |
+          set -euo pipefail
+          APK="mobile/build/app/outputs/flutter-apk/app-release.apk"
+          rm -rf /tmp/apkdex && mkdir -p /tmp/apkdex
+          unzip -q "$APK" 'classes*.dex' -d /tmp/apkdex
+          if ! grep -aq "xyz/vandijke/redchef/MainActivity" /tmp/apkdex/classes*.dex; then
+            echo "::error::Release APK is missing xyz.vandijke.redchef.MainActivity; it would crash on launch."
+            exit 1
+          fi
+
       - name: Upload APK to GitHub Release
         if: hashFiles('mobile/build/app/outputs/flutter-apk/app-release.apk') != ''
         env:

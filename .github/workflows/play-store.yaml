@@ -108,6 +108,18 @@ jobs:
             --build-name "$VERSION_NAME" \
             --build-number "$BUILD_NUMBER"
 
+      - name: Verify bundle contains MainActivity
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          AAB="build/app/outputs/bundle/release/app-release.aab"
+          rm -rf /tmp/aabdex && mkdir -p /tmp/aabdex
+          unzip -q "$AAB" 'base/dex/classes*.dex' -d /tmp/aabdex
+          if ! grep -aq "xyz/vandijke/redchef/MainActivity" /tmp/aabdex/base/dex/classes*.dex; then
+            echo "::error::Release bundle is missing xyz.vandijke.redchef.MainActivity; it would crash on launch."
+            exit 1
+          fi
+
       - name: Upload App Bundle artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

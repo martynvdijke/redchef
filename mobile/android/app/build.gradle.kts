@@ -2,6 +2,9 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    // Apply Kotlin explicitly: android.builtInKotlin is disabled, and relying on
+    // implicit application leaves clean/CI builds without MainActivity compiled.
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
