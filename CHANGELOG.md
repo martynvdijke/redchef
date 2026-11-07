@@ -1,3 +1,10 @@
+## [1.27.1](https://github.com/martynvdijke/redchef/compare/v1.27.0...v1.27.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **android:** compile MainActivity in release builds ([1dd7492](https://github.com/martynvdijke/redchef/commit/1dd749264268ae1b5500b9b6a0167bbf33310ba5))
+
 # [1.27.0](https://github.com/martynvdijke/redchef/compare/v1.26.0...v1.27.0) (2026-11-05)
 
 
