@@ -1,3 +1,10 @@
+## [1.27.2](https://github.com/martynvdijke/redchef/compare/v1.27.1...v1.27.2) (2026-11-07)
+
+
+### Bug Fixes
+
+* **android:** track MainActivity source ignored by root binary pattern ([85f1163](https://github.com/martynvdijke/redchef/commit/85f11637a0661a6340e6b0eee39ac04a0a92debc))
+
 ## [1.27.1](https://github.com/martynvdijke/redchef/compare/v1.27.0...v1.27.1) (2026-11-07)
 
 
