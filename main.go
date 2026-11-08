@@ -92,6 +92,9 @@ func main() {
 	mux.HandleFunc("GET /api/feed", handlers.Feed)
 	mux.HandleFunc("GET /feed", handlers.Feed)
 
+	// Public runtime telemetry config for mobile clients (no auth required).
+	mux.HandleFunc("GET /api/otel-settings", handlers.PublicGetOtelSettings)
+
 	// Public API (auth-aware via middleware)
 	publicMux := http.NewServeMux()
 	publicMux.HandleFunc("GET /api/posts", handlers.ListPosts)
