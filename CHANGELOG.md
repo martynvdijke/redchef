@@ -1,3 +1,10 @@
+## [1.28.1](https://github.com/martynvdijke/redchef/compare/v1.28.0...v1.28.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **notifications:** never notify about the shared demo account ([3511c3a](https://github.com/martynvdijke/redchef/commit/3511c3a0a6307299fdd85e774202ea829bd2b0ec))
+
 # [1.28.0](https://github.com/martynvdijke/redchef/compare/v1.27.2...v1.28.0) (2026-11-08)
 
 
