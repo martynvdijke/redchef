@@ -46,6 +46,13 @@ func SendGotifyNotification(title, message string) {
 // SendEmail delivers an email using the admin-configured SMTP settings.
 // Returns nil without sending when SMTP is not configured (empty host).
 func SendEmail(to, subject, body string) error {
+	// The shared demo account never receives mail: it has no real inbox and its
+	// activity is not the operator's business.
+	if isDemoNotificationTarget(to) {
+		log.Printf("[email] demo account, dropping %q to %s", subject, to)
+		return nil
+	}
+
 	s, err := db.GetEmailSettings()
 	if err != nil {
 		return fmt.Errorf("email settings: %w", err)
@@ -135,6 +142,10 @@ func SendEmail(to, subject, body string) error {
 // SendWelcomeEmail notifies a new member that their account was created.
 // Failures are logged but never block registration.
 func SendWelcomeEmail(email string) {
+	if isDemoNotificationTarget(email) {
+		log.Printf("[email] demo account, skipping welcome email to %s", email)
+		return
+	}
 	subject := "Welkom bij Red Copper Chef — je account is aangemaakt! 🍳"
 	body := fmt.Sprintf(`Hoi!
 
@@ -177,6 +188,10 @@ Als je dit niet hebt aangevraagd, kun je dit bericht gewoon negeren — je wacht
 
 // SendSubscriptionInvoice emails a mock invoice for the €4,99/maand subscription.
 func SendSubscriptionInvoice(email string) {
+	if isDemoNotificationTarget(email) {
+		log.Printf("[email] demo account, skipping subscription invoice to %s", email)
+		return
+	}
 	subject := "Factuur: Royal Member abonnement — €4,99/maand 🧾"
 	body := `Hoi!
 
@@ -202,6 +217,10 @@ Je hebt nu onbeperkt toegang tot alle content. Smakelijk!
 
 // SendItemInvoice emails a mock invoice for a single purchased item.
 func SendItemInvoice(email, postTitle, price string) {
+	if isDemoNotificationTarget(email) {
+		log.Printf("[email] demo account, skipping item invoice to %s", email)
+		return
+	}
 	subject := fmt.Sprintf("Factuur: %s — €%s 🧾", postTitle, price)
 	body := fmt.Sprintf(`Hoi!
 
@@ -227,6 +246,11 @@ Deze content is nu voor jou ontgrendeld. Veel kijkplezier!
 
 // SendTipNotification emails the tipper a confirmation and notifies admin via Gotify.
 func SendTipNotification(email, postTitle string, amountCents int) {
+	// Demo tips are automated smoke-test traffic; they must not page the admin.
+	if isDemoNotificationTarget(email) {
+		log.Printf("[email] demo account, skipping tip notification for %s", email)
+		return
+	}
 	amount := formatEuros(amountCents)
 	subject := fmt.Sprintf("💸 Bedankt voor je tip! — €%s", amount)
 	body := fmt.Sprintf(`Hoi!
@@ -278,6 +302,9 @@ Bekijk de post hier:
 — Red Copper Chef 🍳`, post.Title, description, postURL)
 
 	for _, u := range users {
+		if isDemoNotificationTarget(u.Email) {
+			continue
+		}
 		go func(email string) {
 			if err := SendEmail(email, subject, body); err != nil {
 				log.Printf("[email] Failed to send new-post notification to %s: %v", email, err)

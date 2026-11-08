@@ -109,6 +109,25 @@ func isDemoAccount(u *db.User) bool {
 	return cfg.Enabled && u.Role == "demo" && strings.EqualFold(strings.TrimSpace(u.Email), cfg.Email)
 }
 
+// isDemoNotificationTarget reports whether notifications addressed to email
+// belong to the shared demo account and must therefore be dropped. The demo
+// login is publicly advertised and shared, so its activity (tips, signups,
+// purchases) is not the operator's and must never trigger email or Gotify.
+//
+// A stored demo-role account stays muted even when the feature is disabled
+// later, so flipping DEMO_USER_ENABLED off cannot restart the noise.
+func isDemoNotificationTarget(email string) bool {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return false
+	}
+	if u, err := db.GetUserByEmail(email); err == nil && u != nil && u.Role == "demo" {
+		return true
+	}
+	cfg := demoConfig()
+	return cfg.Enabled && strings.EqualFold(email, strings.TrimSpace(cfg.Email))
+}
+
 // demoDeletionBlocked writes the appropriate error and returns true when the
 // requested account is the protected demo account.
 func demoDeletionBlocked(w http.ResponseWriter, u *db.User, html bool) bool {
