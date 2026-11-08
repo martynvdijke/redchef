@@ -1,3 +1,10 @@
+# [1.28.0](https://github.com/martynvdijke/redchef/compare/v1.27.2...v1.28.0) (2026-11-08)
+
+
+### Features
+
+* **mobile:** add OpenTelemetry tracing with runtime endpoint from API ([899e498](https://github.com/martynvdijke/redchef/commit/899e4988e2444df440a1932fa59e488dda0bb4e4))
+
 ## [1.27.2](https://github.com/martynvdijke/redchef/compare/v1.27.1...v1.27.2) (2026-11-07)
 
 
