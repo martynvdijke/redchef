@@ -4,6 +4,8 @@ Documentation for **redchef**.
 
 See the [project README](https://github.com/martynvdijke/redchef#readme) for an overview.
 
+For traces, metrics and logs, see [Observability](observability.md).
+
 ## OIDC / Authelia SSO
 
 RedChef can authenticate via OIDC against Authelia (`https://authelia.vandijke.xyz`) using Authorization Code + **PKCE S256**. Password login stays available as a fallback and as the rollback path.

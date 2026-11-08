@@ -15,6 +15,7 @@ package main
 //	OTEL_EXPORTER_OTLP_INSECURE / _CERTIFICATE / _COMPRESSION / _TIMEOUT
 //	OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES
 //	OTEL_TRACES_SAMPLER, OTEL_TRACES_SAMPLER_ARG
+//	OTEL_METRIC_EXPORT_INTERVAL, OTEL_METRIC_EXPORT_TIMEOUT
 import (
 	"context"
 	"errors"
@@ -64,6 +65,12 @@ func otelServiceName() string {
 // exporters and installs the global providers. The returned shutdown function
 // flushes and stops every provider and is always safe to call. When no OTLP
 // endpoint is configured no providers are installed and shutdown is a no-op.
+//
+// All exporters and providers are built before any global provider is
+// installed. A failure therefore never leaves the process half-instrumented
+// (for example, a tracer provider that has already been shut down while the
+// global tracer still points at it), and the app keeps working with the
+// no-op providers.
 func setupOTel(ctx context.Context) (func(context.Context) error, error) {
 	noop := func(context.Context) error { return nil }
 	if !otelEndpointConfigured() {
@@ -83,10 +90,6 @@ func setupOTel(ctx context.Context) (func(context.Context) error, error) {
 		return noop, fmt.Errorf("build resource: %w", err)
 	}
 
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{}, propagation.Baggage{},
-	))
-
 	// ── Traces ──
 	traceExp, err := otlptracehttp.New(ctx)
 	if err != nil {
@@ -96,7 +99,6 @@ func setupOTel(ctx context.Context) (func(context.Context) error, error) {
 		sdktrace.WithBatcher(traceExp),
 		sdktrace.WithResource(res),
 	)
-	otel.SetTracerProvider(tp)
 
 	// ── Metrics ──
 	metricExp, err := otlpmetrichttp.New(ctx)
@@ -108,12 +110,6 @@ func setupOTel(ctx context.Context) (func(context.Context) error, error) {
 		sdkmetric.WithResource(res),
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp)),
 	)
-	otel.SetMeterProvider(mp)
-
-	// Go runtime metrics (go.* / process.*) via the global meter provider.
-	if err := runtime.Start(runtime.WithMinimumReadMemStatsInterval(15 * time.Second)); err != nil {
-		log.Printf("OpenTelemetry: runtime metrics unavailable: %v", err)
-	}
 
 	// ── Logs ──
 	logExp, err := otlploghttp.New(ctx)
@@ -126,6 +122,21 @@ func setupOTel(ctx context.Context) (func(context.Context) error, error) {
 		sdklog.WithResource(res),
 		sdklog.WithProcessor(sdklog.NewBatchProcessor(logExp)),
 	)
+
+	// Every exporter is healthy: install the globals. otelhttp reads the
+	// global meter provider when its handler is constructed, so this must
+	// happen before NewHandler is called in main.
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{}, propagation.Baggage{},
+	))
+	otel.SetTracerProvider(tp)
+	otel.SetMeterProvider(mp)
+	otel.SetLoggerProvider(lp)
+
+	// Go runtime metrics (go.* / process.*) via the global meter provider.
+	if err := runtime.Start(runtime.WithMinimumReadMemStatsInterval(15 * time.Second)); err != nil {
+		log.Printf("OpenTelemetry: runtime metrics unavailable: %v", err)
+	}
 
 	// Bridge the stdlib logger into OTLP while keeping the existing stderr
 	// output: every log.Printf line also becomes an OTel log record.
