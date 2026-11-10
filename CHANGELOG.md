@@ -1,3 +1,10 @@
+## [1.28.2](https://github.com/martynvdijke/redchef/compare/v1.28.1...v1.28.2) (2026-11-10)
+
+
+### Bug Fixes
+
+* **renovate:** disable platform automerge so Renovate merges green PRs itself ([3afa5f1](https://github.com/martynvdijke/redchef/commit/3afa5f1c28fa929f82af08ba1712cb7634e54467))
+
 ## [1.28.1](https://github.com/martynvdijke/redchef/compare/v1.28.0...v1.28.1) (2026-11-08)
 
 
