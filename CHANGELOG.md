@@ -1,3 +1,10 @@
+# [1.29.0](https://github.com/martynvdijke/redchef/compare/v1.28.2...v1.29.0) (2026-11-12)
+
+
+### Features
+
+* **notifications:** add realtime, web push and FCM notifications ([e4dc445](https://github.com/martynvdijke/redchef/commit/e4dc4458b5aadde4a8cd6bfbb1f5f6d87cd7b846))
+
 ## [1.28.2](https://github.com/martynvdijke/redchef/compare/v1.28.1...v1.28.2) (2026-11-10)
 
 
