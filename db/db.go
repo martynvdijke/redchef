@@ -307,6 +307,55 @@ func migrate() error {
 			revoked_at DATETIME,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		);
+
+		CREATE TABLE IF NOT EXISTS notification_settings (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			new_post_enabled INTEGER NOT NULL DEFAULT 1,
+			web_push_enabled INTEGER NOT NULL DEFAULT 0,
+			fcm_enabled INTEGER NOT NULL DEFAULT 0,
+			vapid_public_key TEXT NOT NULL DEFAULT '',
+			vapid_private_key TEXT NOT NULL DEFAULT '',
+			vapid_subject TEXT NOT NULL DEFAULT '',
+			fcm_project_id TEXT NOT NULL DEFAULT '',
+			fcm_client_email TEXT NOT NULL DEFAULT '',
+			fcm_private_key TEXT NOT NULL DEFAULT '',
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE IF NOT EXISTS notification_prefs (
+			user_id INTEGER PRIMARY KEY,
+			new_posts INTEGER NOT NULL DEFAULT 1,
+			email INTEGER NOT NULL DEFAULT 1,
+			push INTEGER NOT NULL DEFAULT 1,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS device_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			token TEXT UNIQUE NOT NULL,
+			platform TEXT NOT NULL DEFAULT 'android',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS web_push_subscriptions (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			endpoint TEXT UNIQUE NOT NULL,
+			p256dh TEXT NOT NULL,
+			auth TEXT NOT NULL,
+			user_agent TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
+		CREATE INDEX IF NOT EXISTS idx_web_push_subscriptions_user ON web_push_subscriptions(user_id);
 	`)
 
 	// Migrate existing tables: add columns that may be missing on upgraded DBs
@@ -347,6 +396,11 @@ func migrate() error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// Notification settings are a singleton row (id = 1), like analytics.
+	if _, err := DB.Exec("INSERT OR IGNORE INTO notification_settings (id) VALUES (1)"); err != nil {
+		return err
 	}
 
 	// Migrate existing users: set first user as admin if no roles set
@@ -617,6 +671,9 @@ func DeleteUser(id int64) error {
 		"DELETE FROM favourites WHERE user_id = ?",
 		"DELETE FROM tips WHERE user_id = ?",
 		"DELETE FROM purchases WHERE user_id = ?",
+		"DELETE FROM notification_prefs WHERE user_id = ?",
+		"DELETE FROM device_tokens WHERE user_id = ?",
+		"DELETE FROM web_push_subscriptions WHERE user_id = ?",
 		"DELETE FROM users WHERE id = ?",
 	}
 	for _, q := range steps {

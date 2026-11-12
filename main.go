@@ -95,6 +95,24 @@ func main() {
 	// Public runtime telemetry config for mobile clients (no auth required).
 	mux.HandleFunc("GET /api/otel-settings", handlers.PublicGetOtelSettings)
 
+	// Notification feature switches + VAPID public key (public, no secrets).
+	mux.HandleFunc("GET /api/notifications/config", handlers.GetNotificationConfig)
+
+	// Authenticated notification endpoints: preferences, SSE stream and
+	// device/web-push subscription management.
+	notifMux := http.NewServeMux()
+	notifMux.HandleFunc("GET /api/notifications/preferences", handlers.GetNotificationPreferences)
+	notifMux.HandleFunc("PUT /api/notifications/preferences", handlers.UpdateNotificationPreferences)
+	notifMux.HandleFunc("GET /api/notifications/stream", handlers.NotificationStream)
+	notifMux.HandleFunc("POST /api/notifications/devices", handlers.RegisterDeviceToken)
+	notifMux.HandleFunc("DELETE /api/notifications/devices", handlers.UnregisterDeviceToken)
+	notifMux.HandleFunc("POST /api/notifications/web-push", handlers.SubscribeWebPush)
+	notifMux.HandleFunc("DELETE /api/notifications/web-push", handlers.UnsubscribeWebPush)
+	mux.Handle("GET /api/notifications/", handlers.AuthMiddleware(handlers.RequireAuth(notifMux)))
+	mux.Handle("POST /api/notifications/", handlers.AuthMiddleware(handlers.RequireAuth(notifMux)))
+	mux.Handle("PUT /api/notifications/", handlers.AuthMiddleware(handlers.RequireAuth(notifMux)))
+	mux.Handle("DELETE /api/notifications/", handlers.AuthMiddleware(handlers.RequireAuth(notifMux)))
+
 	// Public API (auth-aware via middleware)
 	publicMux := http.NewServeMux()
 	publicMux.HandleFunc("GET /api/posts", handlers.ListPosts)
@@ -145,6 +163,10 @@ func main() {
 	adminMux.HandleFunc("PUT /api/admin/settings/analytics", handlers.AdminUpdateAnalyticsSettings)
 	adminMux.HandleFunc("GET /api/admin/settings/email", handlers.AdminGetEmailSettings)
 	adminMux.HandleFunc("PUT /api/admin/settings/email", handlers.AdminUpdateEmailSettings)
+	adminMux.HandleFunc("GET /api/admin/settings/notifications", handlers.AdminGetNotificationSettings)
+	adminMux.HandleFunc("PUT /api/admin/settings/notifications", handlers.AdminUpdateNotificationSettings)
+	adminMux.HandleFunc("POST /api/admin/settings/notifications/test", handlers.AdminTestNotification)
+	adminMux.HandleFunc("POST /api/admin/settings/notifications/vapid", handlers.AdminGenerateVAPIDKeys)
 	adminMux.HandleFunc("GET /api/admin/comments", handlers.AdminListComments)
 	adminMux.HandleFunc("DELETE /api/admin/comments/{id}", handlers.AdminDeleteComment)
 	adminMux.HandleFunc("PUT /api/admin/posts/{id}/links", handlers.AdminSetPostLinks)

@@ -221,6 +221,68 @@ class ApiToken {
   bool get isRevoked => revokedAt != null;
 }
 
+/// Public notification configuration exposed by `GET /api/notifications/config`.
+/// When the server is older than the notifications feature (404) or unreachable
+/// this defaults to "everything off", so the UI can degrade quietly.
+class NotificationConfig {
+  final bool enabled;
+  final bool newPostEnabled;
+  final bool webPushEnabled;
+  final bool fcmEnabled;
+  final String vapidPublicKey;
+
+  const NotificationConfig({
+    this.enabled = false,
+    this.newPostEnabled = false,
+    this.webPushEnabled = false,
+    this.fcmEnabled = false,
+    this.vapidPublicKey = '',
+  });
+
+  factory NotificationConfig.fromJson(Map<String, dynamic> j) => NotificationConfig(
+        enabled: _jsonFlag(j['enabled']),
+        newPostEnabled: _jsonFlag(j['new_post_enabled']),
+        webPushEnabled: _jsonFlag(j['web_push_enabled']),
+        fcmEnabled: _jsonFlag(j['fcm_enabled']),
+        vapidPublicKey: j['vapid_public_key']?.toString() ?? '',
+      );
+
+  bool get pushSupported => enabled && fcmEnabled;
+}
+
+/// Per-user notification preferences (`GET/PUT /api/notifications/preferences`).
+class NotificationPrefs {
+  final bool newPosts;
+  final bool email;
+  final bool push;
+
+  const NotificationPrefs({this.newPosts = true, this.email = true, this.push = true});
+
+  factory NotificationPrefs.fromJson(Map<String, dynamic> j) => NotificationPrefs(
+        newPosts: _jsonFlag(j['new_posts']),
+        email: _jsonFlag(j['email']),
+        push: _jsonFlag(j['push']),
+      );
+
+  Map<String, dynamic> toJson() => {'new_posts': newPosts, 'email': email, 'push': push};
+
+  NotificationPrefs copyWith({bool? newPosts, bool? email, bool? push}) => NotificationPrefs(
+        newPosts: newPosts ?? this.newPosts,
+        email: email ?? this.email,
+        push: push ?? this.push,
+      );
+}
+
+/// Interprets a JSON boolean that may arrive as `true/false`, `1/0` or a string.
+/// Missing values fall back to the server-side default of `true`.
+bool _jsonFlag(dynamic value) {
+  if (value == null) return true;
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  final text = value.toString().toLowerCase();
+  return text == 'true' || text == '1';
+}
+
 class CreatePostResponse {
   final int id;
   final String title;

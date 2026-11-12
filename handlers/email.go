@@ -273,7 +273,8 @@ De Chef waardeert het enorm! 🍳
 }
 
 // SendNewPostNotification emails all registered users about a new post.
-// The creator (adminUserID) is skipped so they don't notify themselves.
+// The creator (adminUserID) is skipped so they don't notify themselves, and so
+// is anyone who turned e-mail notifications off.
 func SendNewPostNotification(post db.Post, adminUserID int64) {
 	users, err := db.ListUsers()
 	if err != nil {
@@ -302,7 +303,13 @@ Bekijk de post hier:
 — Red Copper Chef 🍳`, post.Title, description, postURL)
 
 	for _, u := range users {
+		if u.ID == adminUserID {
+			continue
+		}
 		if isDemoNotificationTarget(u.Email) {
+			continue
+		}
+		if prefs, err := db.GetNotificationPrefs(u.ID); err == nil && !prefs.Email {
 			continue
 		}
 		go func(email string) {

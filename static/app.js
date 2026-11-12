@@ -13,6 +13,10 @@ const API = {
   payItem: '/api/pay/item',
   analytics: '/api/settings/analytics',
   favourites: '/api/favourites',
+  notifConfig: '/api/notifications/config',
+  notifPrefs: '/api/notifications/preferences',
+  notifStream: '/api/notifications/stream',
+  notifWebPush: '/api/notifications/web-push',
 };
 
 let currentUser = null;
@@ -120,6 +124,8 @@ function showLoggedIn() {
   } else {
     $('nav-admin-link').style.display = 'none';
   }
+
+  initNotifications();
 }
 
 function showLoggedOut() {
@@ -129,6 +135,7 @@ function showLoggedOut() {
   $('paywall-banner').style.display = 'none';
   $('tab-favourites').style.display = 'none';
   currentUser = null;
+  teardownNotifications();
 }
 
 async function handleLogin(e) {
@@ -1166,6 +1173,7 @@ function openProfileModal() {
   paidBadge.style.display = (currentUser.paid || currentUser.role === 'admin') ? 'inline-flex' : 'none';
   $('profile-modal').style.display = 'flex';
   $('token-secret-box').style.display = 'none';
+  refreshProfileNotifications();
   loadTokens();
 }
 
@@ -1245,6 +1253,767 @@ async function handleTokenAction(action, id) {
   }
 }
 
+// ── Notifications (in-app, SSE, Web Push) ──
+//
+// Everything below stays inert unless GET /api/notifications/config reports
+// notifications as enabled. Every browser capability (Notification, Push,
+// EventSource, service workers) is feature-detected so an older browser just
+// keeps the quiet UI instead of throwing.
+
+const NOTIF_STORE_KEY = 'redchef_notifications';
+const NOTIF_LIMIT = 20;
+const NOTIF_ICON =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' rx='24' fill='%23D42B2B'/%3E%3Cpath d='M48 22c-9.4 0-16 7-16 16.4V49l-5.6 9.2c-1 1.6.2 3.6 2 3.6h39.2c1.8 0 3-2 2-3.6L64 49V38.4C64 29 57.4 22 48 22z' fill='%23FFF8F0'/%3E%3Ccircle cx='48' cy='70' r='6' fill='%23FFF8F0'/%3E%3C/svg%3E";
+
+const notif = {
+  config: null,
+  prefs: null,
+  enabled: false,
+  initialized: false,
+  userId: null,
+  items: [],
+  stream: null,
+  retryTimer: null,
+  retryDelay: 3000,
+  swReg: null,
+  subscribed: false,
+  busy: false,
+  statusTimer: null,
+  prefTimer: null,
+  toastTimer: null,
+};
+
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+function escapeAttr(str) {
+  return escapeHtml(String(str == null ? '' : str))
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Only same-origin, path-like URLs are allowed through — protects the panel
+// from a javascript: or off-site url arriving in a payload.
+function safeNotifUrl(url) {
+  if (typeof url !== 'string' || !url) return '/';
+  if (url.charAt(0) === '/') return url;
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.origin === window.location.origin) return u.pathname + u.search + u.hash;
+  } catch (_) {}
+  return '/';
+}
+
+function notifTimeAgo(iso) {
+  const then = new Date(iso).getTime();
+  if (!then || isNaN(then)) return '';
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 45) return 'Just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return mins + 'm ago';
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return hours + 'h ago';
+  const days = Math.round(hours / 24);
+  if (days < 7) return days + 'd ago';
+  return new Date(then).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// ── Local store (recent list, capped) ──
+
+function loadStoredNotifications() {
+  try {
+    const raw = localStorage.getItem(NOTIF_STORE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(n => n && typeof n.id === 'string')
+      .slice(0, NOTIF_LIMIT)
+      .map(n => ({
+        id: n.id,
+        type: typeof n.type === 'string' ? n.type : 'new_post',
+        title: typeof n.title === 'string' ? n.title : '',
+        body: typeof n.body === 'string' ? n.body : '',
+        url: safeNotifUrl(n.url),
+        created_at: typeof n.created_at === 'string' ? n.created_at : '',
+        read: !!n.read,
+      }));
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveStoredNotifications() {
+  try {
+    localStorage.setItem(NOTIF_STORE_KEY, JSON.stringify(notif.items.slice(0, NOTIF_LIMIT)));
+  } catch (_) {
+    // Storage full or blocked (private mode) — in-memory list still works.
+  }
+}
+
+function unreadNotificationCount() {
+  return notif.items.filter(n => !n.read).length;
+}
+
+// ── Badge / panel / list ──
+
+function updateNotifBadge() {
+  const badge = $('notif-badge');
+  const btn = $('btn-notifications');
+  const count = unreadNotificationCount();
+  if (badge) {
+    if (!notif.enabled || count === 0) {
+      badge.hidden = true;
+      badge.textContent = '';
+    } else {
+      badge.hidden = false;
+      badge.textContent = count > 9 ? '9+' : String(count);
+    }
+  }
+  if (btn) {
+    btn.setAttribute('aria-label', count > 0 ? 'Notifications, ' + count + ' unread' : 'Notifications');
+  }
+}
+
+function renderNotifList() {
+  const list = $('notif-list');
+  if (!list) return;
+
+  const markAll = $('notif-mark-all');
+  if (markAll) markAll.setAttribute('aria-disabled', unreadNotificationCount() === 0 ? 'true' : 'false');
+
+  if (!notif.items.length) {
+    list.innerHTML =
+      '<div class="notif-empty">' +
+        '<span class="notif-empty-title">Nothing here yet</span>' +
+        '<span class="notif-empty-desc">New posts from the Chef will land here.</span>' +
+      '</div>';
+    return;
+  }
+
+  list.innerHTML = notif.items.map(item => {
+    const unread = !item.read;
+    return (
+      '<a class="notif-item ' + (unread ? 'is-unread' : 'is-read') + '"' +
+        ' href="' + escapeAttr(item.url) + '"' +
+        ' data-notif-id="' + escapeAttr(item.id) + '">' +
+        '<span class="notif-item-dot' + (unread ? '' : ' is-read') + '" aria-hidden="true"></span>' +
+        '<span class="notif-item-main">' +
+          '<span class="notif-item-title">' + escapeHtml(item.title || 'Nieuwe post') + '</span>' +
+          (item.body ? '<span class="notif-item-body">' + escapeHtml(item.body) + '</span>' : '') +
+          '<span class="notif-item-time">' + escapeHtml(notifTimeAgo(item.created_at)) + '</span>' +
+        '</span>' +
+      '</a>'
+    );
+  }).join('');
+
+  list.querySelectorAll('[data-notif-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      markNotificationRead(el.dataset.notifId);
+      closeNotifPanel();
+    });
+  });
+}
+
+function isNotifPanelOpen() {
+  const panel = $('notif-panel');
+  return !!panel && !panel.hidden;
+}
+
+function openNotifPanel() {
+  if (!notif.enabled) return;
+  const panel = $('notif-panel');
+  const btn = $('btn-notifications');
+  if (!panel || !btn) return;
+  hideNotifToast();
+  renderNotifList();
+  panel.hidden = false;
+  btn.classList.add('is-open');
+  btn.setAttribute('aria-expanded', 'true');
+  try { panel.focus({ preventScroll: true }); } catch (_) { panel.focus(); }
+}
+
+function closeNotifPanel(opts) {
+  const panel = $('notif-panel');
+  const btn = $('btn-notifications');
+  if (!panel || panel.hidden) return;
+  panel.hidden = true;
+  if (btn) {
+    btn.classList.remove('is-open');
+    btn.setAttribute('aria-expanded', 'false');
+    if (opts && opts.refocus) btn.focus();
+  }
+}
+
+function toggleNotifPanel() {
+  if (isNotifPanelOpen()) closeNotifPanel();
+  else openNotifPanel();
+}
+
+function markNotificationRead(id) {
+  let changed = false;
+  notif.items.forEach(n => {
+    if (n.id === id && !n.read) { n.read = true; changed = true; }
+  });
+  if (!changed) return;
+  saveStoredNotifications();
+  updateNotifBadge();
+  renderNotifList();
+}
+
+function markAllNotificationsRead() {
+  const btn = $('notif-mark-all');
+  if (btn && btn.getAttribute('aria-disabled') === 'true') return;
+  if (!notif.items.length) return;
+  notif.items.forEach(n => { n.read = true; });
+  saveStoredNotifications();
+  updateNotifBadge();
+  renderNotifList();
+  hideNotifToast();
+}
+
+// ── Toast ──
+
+function showNotifToast(item) {
+  const toast = $('notif-toast');
+  if (!toast) return;
+  const link = $('notif-toast-link');
+  const title = $('notif-toast-title');
+  const body = $('notif-toast-body');
+  if (title) title.textContent = item.title || 'Nieuwe post';
+  if (body) body.textContent = item.body || '';
+  if (link) link.href = safeNotifUrl(item.url);
+  toast.hidden = false;
+  if (notif.toastTimer) clearTimeout(notif.toastTimer);
+  notif.toastTimer = setTimeout(hideNotifToast, 6000);
+}
+
+function hideNotifToast() {
+  if (notif.toastTimer) {
+    clearTimeout(notif.toastTimer);
+    notif.toastTimer = null;
+  }
+  const toast = $('notif-toast');
+  if (toast) toast.hidden = true;
+}
+
+// ── Incoming event ──
+
+function handleIncomingNotification(ev) {
+  if (!ev || typeof ev !== 'object') return;
+  const id = typeof ev.id === 'string' ? ev.id : '';
+  if (!id) return;
+  if (notif.items.some(n => n.id === id)) return;
+
+  const panelVisible = isNotifPanelOpen() && !document.hidden;
+  const item = {
+    id,
+    type: typeof ev.type === 'string' ? ev.type : 'new_post',
+    title: typeof ev.title === 'string' ? ev.title : 'Nieuwe post',
+    body: typeof ev.body === 'string' ? ev.body : '',
+    url: safeNotifUrl(ev.url),
+    created_at: typeof ev.created_at === 'string' ? ev.created_at : new Date().toISOString(),
+    read: panelVisible,
+  };
+
+  notif.items.unshift(item);
+  if (notif.items.length > NOTIF_LIMIT) notif.items.length = NOTIF_LIMIT;
+  saveStoredNotifications();
+  updateNotifBadge();
+  if (panelVisible) renderNotifList();
+  if (!item.read) showNotifToast(item);
+  maybeSystemNotification(item);
+}
+
+// The tab is hidden: raise a real OS notification through the service worker so
+// the event still reaches the user while they are looking at something else.
+function maybeSystemNotification(item) {
+  if (!document.hidden) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const reg = notif.swReg;
+  if (!reg || typeof reg.showNotification !== 'function') return;
+  try {
+    reg.showNotification(item.title || 'Nieuwe post', {
+      body: item.body || '',
+      icon: NOTIF_ICON,
+      badge: NOTIF_ICON,
+      tag: item.id,
+      data: { url: safeNotifUrl(item.url) },
+    });
+  } catch (_) {}
+}
+
+// ── SSE stream ──
+
+function startNotifStream() {
+  if (!notif.enabled || !currentUser) return;
+  if (typeof EventSource === 'undefined') return;
+  if (notif.stream) return;
+
+  let es;
+  try {
+    es = new EventSource(API.notifStream);
+  } catch (_) {
+    return;
+  }
+  notif.stream = es;
+
+  es.addEventListener('open', () => {
+    notif.retryDelay = 3000;
+  });
+
+  es.addEventListener('notification', (e) => {
+    let ev = null;
+    try { ev = JSON.parse(e.data); } catch (_) { return; }
+    handleIncomingNotification(ev);
+  });
+
+  es.addEventListener('error', () => {
+    if (notif.stream !== es) return;
+    try { es.close(); } catch (_) {}
+    notif.stream = null;
+    scheduleNotifReconnect();
+  });
+}
+
+function scheduleNotifReconnect() {
+  if (!notif.enabled || !currentUser) return;
+  if (notif.retryTimer) return;
+  const delay = notif.retryDelay;
+  notif.retryDelay = Math.min(Math.round(notif.retryDelay * 1.7), 15000);
+  notif.retryTimer = setTimeout(() => {
+    notif.retryTimer = null;
+    if (currentUser && notif.enabled) startNotifStream();
+  }, delay);
+}
+
+function teardownNotifStream() {
+  if (notif.stream) {
+    try { notif.stream.close(); } catch (_) {}
+    notif.stream = null;
+  }
+  if (notif.retryTimer) {
+    clearTimeout(notif.retryTimer);
+    notif.retryTimer = null;
+  }
+  notif.retryDelay = 3000;
+}
+
+// ── Config + preferences ──
+
+async function loadNotifConfig() {
+  try {
+    const res = await fetch(API.notifConfig, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const cfg = await res.json();
+    return cfg && typeof cfg === 'object' ? cfg : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function loadNotifPrefs() {
+  try {
+    const res = await fetch(API.notifPrefs, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const p = await res.json();
+    if (!p || typeof p !== 'object') return null;
+    notif.prefs = {
+      new_posts: p.new_posts !== false,
+      email: p.email !== false,
+      push: p.push !== false,
+    };
+    return notif.prefs;
+  } catch (_) {
+    return null;
+  }
+}
+
+function prefChecked(id) {
+  const el = $(id);
+  return !!(el && el.checked);
+}
+
+function renderPrefsUI() {
+  const prefs = notif.prefs || { new_posts: true, email: true, push: true };
+  const map = { 'pref-new-posts': 'new_posts', 'pref-push': 'push', 'pref-email': 'email' };
+  Object.keys(map).forEach(id => {
+    const el = $(id);
+    if (el) el.checked = prefs[map[id]] !== false;
+  });
+  updateWebPushUI();
+}
+
+function setPrefStatus(text, tone) {
+  if (notif.statusTimer) {
+    clearTimeout(notif.statusTimer);
+    notif.statusTimer = null;
+  }
+  const el = $('pref-status');
+  if (!el) return;
+  el.textContent = text || '';
+  if (tone) el.dataset.tone = tone;
+  else delete el.dataset.tone;
+}
+
+function flashPrefStatus(text, tone) {
+  setPrefStatus(text, tone);
+  notif.statusTimer = setTimeout(() => {
+    notif.statusTimer = null;
+    updateWebPushUI();
+  }, 2600);
+}
+
+async function saveNotifPrefs() {
+  const payload = {
+    new_posts: prefChecked('pref-new-posts'),
+    email: prefChecked('pref-email'),
+    push: prefChecked('pref-push'),
+  };
+  if (notif.prefs) Object.assign(notif.prefs, payload);
+  flashPrefStatus('Saving…', 'pending');
+
+  try {
+    const res = await fetch(API.notifPrefs, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('failed');
+    let saved = null;
+    try { saved = await res.json(); } catch (_) {}
+    if (saved && typeof saved === 'object') {
+      notif.prefs = {
+        new_posts: saved.new_posts !== false,
+        email: saved.email !== false,
+        push: saved.push !== false,
+      };
+    }
+    flashPrefStatus('Preferences saved.', 'ok');
+  } catch (_) {
+    flashPrefStatus('Could not save your preferences.', 'error');
+  }
+}
+
+function scheduleNotifPrefSave() {
+  if (notif.prefTimer) clearTimeout(notif.prefTimer);
+  notif.prefTimer = setTimeout(() => {
+    notif.prefTimer = null;
+    saveNotifPrefs();
+  }, 250);
+}
+
+// ── Web Push ──
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
+function bytesEqual(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function syncWebPushButton() {
+  const btn = $('btn-enable-web-push');
+  if (!btn) return;
+  const cfg = notif.config || {};
+
+  if (!notif.enabled || !pushSupported() ||
+      !cfg.web_push_enabled || !cfg.vapid_public_key ||
+      Notification.permission === 'denied') {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  btn.textContent = notif.subscribed ? 'Disable browser notifications' : 'Enable browser notifications';
+}
+
+function updateWebPushUI() {
+  const btn = $('btn-enable-web-push');
+  const cfg = notif.config || {};
+
+  if (!notif.enabled) {
+    if (btn) btn.hidden = true;
+    setPrefStatus('');
+    return;
+  }
+  if (!pushSupported()) {
+    if (btn) btn.hidden = true;
+    setPrefStatus('This browser does not support push notifications.', 'muted');
+    return;
+  }
+  if (!cfg.web_push_enabled || !cfg.vapid_public_key) {
+    if (btn) btn.hidden = true;
+    setPrefStatus('Push notifications are not set up on this server yet.', 'muted');
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    if (btn) btn.hidden = true;
+    setPrefStatus('Notifications are blocked for this site. Allow them in your browser settings first.', 'muted');
+    return;
+  }
+
+  syncWebPushButton();
+  setPrefStatus(
+    notif.subscribed
+      ? 'This browser will show a notification when a new post goes live.'
+      : 'Get a browser notification when a new post goes live.',
+    'muted'
+  );
+}
+
+async function refreshPushSubscriptionState() {
+  if (!pushSupported() || !notif.swReg) {
+    notif.subscribed = false;
+    return;
+  }
+  try {
+    const sub = await notif.swReg.pushManager.getSubscription();
+    notif.subscribed = !!sub;
+  } catch (_) {
+    notif.subscribed = false;
+  }
+}
+
+async function postWebPushSubscription(sub) {
+  let json = null;
+  try {
+    json = typeof sub.toJSON === 'function' ? sub.toJSON() : sub;
+  } catch (_) {
+    json = sub;
+  }
+  const endpoint = (json && json.endpoint) || '';
+  const keys = (json && json.keys) || {};
+  if (!endpoint || !keys.p256dh || !keys.auth) return false;
+
+  try {
+    const res = await fetch(API.notifWebPush, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }),
+    });
+    return res.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function deleteWebPushSubscription(endpoint) {
+  if (!endpoint) return false;
+  try {
+    const res = await fetch(API.notifWebPush, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint }),
+    });
+    return res.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function enableWebPush() {
+  if (notif.busy) return;
+  const btn = $('btn-enable-web-push');
+  notif.busy = true;
+  if (btn) btn.disabled = true;
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      setPrefStatus('Notification permission was not granted, so nothing will be sent.', 'error');
+      return;
+    }
+
+    const reg = notif.swReg || (await navigator.serviceWorker.ready);
+    notif.swReg = reg;
+
+    const cfg = notif.config || {};
+    const wantKey = cfg.vapid_public_key ? urlBase64ToUint8Array(cfg.vapid_public_key) : null;
+
+    let sub = await reg.pushManager.getSubscription();
+
+    // A subscription created with an older VAPID key cannot be used by this
+    // server, so replace it instead of registering a dead endpoint.
+    if (sub && wantKey && sub.options && sub.options.applicationServerKey &&
+        !bytesEqual(new Uint8Array(sub.options.applicationServerKey), wantKey)) {
+      try { await sub.unsubscribe(); } catch (_) {}
+      sub = null;
+    }
+
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: wantKey || undefined,
+      });
+    }
+
+    const ok = await postWebPushSubscription(sub);
+    notif.subscribed = ok;
+    if (ok) setPrefStatus('Browser notifications are on.', 'ok');
+    else setPrefStatus('Subscribed here, but the server did not accept it. Try again later.', 'error');
+  } catch (err) {
+    const detail = err && err.message ? ' ' + err.message : '';
+    setPrefStatus('Could not enable browser notifications.' + detail, 'error');
+  } finally {
+    notif.busy = false;
+    if (btn) btn.disabled = false;
+    syncWebPushButton();
+  }
+}
+
+async function disableWebPush() {
+  if (notif.busy) return;
+  const btn = $('btn-enable-web-push');
+  notif.busy = true;
+  if (btn) btn.disabled = true;
+
+  try {
+    let sub = null;
+    if (notif.swReg) {
+      try { sub = await notif.swReg.pushManager.getSubscription(); } catch (_) {}
+    }
+    const endpoint = sub ? sub.endpoint : '';
+    if (sub) {
+      try { await sub.unsubscribe(); } catch (_) {}
+    }
+    if (endpoint) await deleteWebPushSubscription(endpoint);
+    notif.subscribed = false;
+    setPrefStatus('Browser notifications are off.', 'ok');
+  } catch (_) {
+    setPrefStatus('Could not turn off browser notifications.', 'error');
+  } finally {
+    notif.busy = false;
+    if (btn) btn.disabled = false;
+    syncWebPushButton();
+  }
+}
+
+function toggleWebPush() {
+  if (notif.subscribed) disableWebPush();
+  else enableWebPush();
+}
+
+// ── Service worker ──
+
+async function registerNotifServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    notif.swReg = await navigator.serviceWorker.register('/sw.js');
+  } catch (_) {
+    notif.swReg = null;
+    return;
+  }
+
+  await refreshPushSubscriptionState();
+
+  // Re-register an existing subscription: the server may have lost it, or the
+  // browser may have refreshed the endpoint since the last visit.
+  const cfg = notif.config || {};
+  if (notif.subscribed && cfg.web_push_enabled &&
+      'Notification' in window && Notification.permission === 'granted') {
+    try {
+      const sub = await notif.swReg.pushManager.getSubscription();
+      if (sub) await postWebPushSubscription(sub);
+    } catch (_) {}
+  }
+
+  syncWebPushButton();
+}
+
+// ── Lifecycle ──
+
+async function initNotifications() {
+  if (!currentUser) return;
+  // showLoggedIn() also runs after a purchase; only initialise once per user.
+  if (notif.initialized && notif.userId === currentUser.id) return;
+  notif.userId = currentUser.id;
+  notif.initialized = true;
+
+  const cfg = await loadNotifConfig();
+  // The user may have signed out while the request was in flight.
+  if (!currentUser || notif.userId !== currentUser.id) return;
+
+  notif.config = cfg;
+  notif.enabled = !!(cfg && cfg.enabled);
+
+  // A session may have started before the request resolved; only one stream.
+  notif.items = loadStoredNotifications();
+
+  if (!notif.enabled) {
+    teardownNotifStream();
+    const wrapEl = $('notif-wrap');
+    if (wrapEl) wrapEl.style.display = 'none';
+    const blockEl = $('profile-notif');
+    if (blockEl) blockEl.style.display = 'none';
+    closeNotifPanel();
+    notif.items = [];
+    updateNotifBadge();
+    return;
+  }
+
+  const wrap = $('notif-wrap');
+  if (wrap) wrap.style.display = 'flex';
+
+  updateNotifBadge();
+  renderNotifList();
+
+  await loadNotifPrefs();
+  renderPrefsUI();
+
+  startNotifStream();
+  registerNotifServiceWorker();
+}
+
+function refreshProfileNotifications() {
+  if (!notif.enabled) {
+    const block = $('profile-notif');
+    if (block) block.style.display = 'none';
+    return;
+  }
+  const block = $('profile-notif');
+  if (block) block.style.display = 'block';
+  renderPrefsUI();
+  refreshPushSubscriptionState().then(syncWebPushButton);
+}
+
+function teardownNotifications() {
+  teardownNotifStream();
+  hideNotifToast();
+  closeNotifPanel();
+
+  notif.enabled = false;
+  notif.initialized = false;
+  notif.userId = null;
+  notif.config = null;
+  notif.prefs = null;
+  notif.items = [];
+  notif.subscribed = false;
+  notif.busy = false;
+  if (notif.prefTimer) { clearTimeout(notif.prefTimer); notif.prefTimer = null; }
+
+  const wrap = $('notif-wrap');
+  if (wrap) wrap.style.display = 'none';
+  const block = $('profile-notif');
+  if (block) block.style.display = 'none';
+  const list = $('notif-list');
+  if (list) list.innerHTML = '';
+  updateNotifBadge();
+
+  // Don't carry one account's notifications into the next session.
+  try { localStorage.removeItem(NOTIF_STORE_KEY); } catch (_) {}
+}
+
 // ── Init ──
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1316,6 +2085,31 @@ document.addEventListener('DOMContentLoaded', () => {
     navigator.clipboard.writeText($('token-secret-value').textContent)
       .then(() => showToast('🔑 Token copied'));
   });
+
+  // Notifications (bell, panel, preferences)
+  $('btn-notifications').addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleNotifPanel();
+  });
+  $('notif-mark-all').addEventListener('click', markAllNotificationsRead);
+  document.addEventListener('click', (e) => {
+    if (!isNotifPanelOpen()) return;
+    const panel = $('notif-panel');
+    const btn = $('btn-notifications');
+    if (panel && panel.contains(e.target)) return;
+    if (btn && btn.contains(e.target)) return;
+    closeNotifPanel();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isNotifPanelOpen()) closeNotifPanel({ refocus: true });
+  });
+  ['pref-new-posts', 'pref-push', 'pref-email'].forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener('change', scheduleNotifPrefSave);
+  });
+  $('btn-enable-web-push').addEventListener('click', toggleWebPush);
+  $('notif-toast-close').addEventListener('click', hideNotifToast);
+  $('notif-toast-link').addEventListener('click', hideNotifToast);
 
   // iDEAL modal
   $('ideal-modal-close').addEventListener('click', closeIdealModal);

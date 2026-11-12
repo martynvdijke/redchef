@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../api/models.dart';
 import '../auth/auth_provider.dart';
+import '../notifications/push_service.dart';
 
 class AccountScreen extends ConsumerStatefulWidget {
   const AccountScreen({super.key});
@@ -17,6 +19,81 @@ class AccountScreen extends ConsumerStatefulWidget {
 
 class _AccountScreenState extends ConsumerState<AccountScreen> {
   bool _exporting = false;
+  NotificationConfig? _config;
+  NotificationPrefs? _prefs;
+  bool _notificationsLoading = true;
+  bool _savingPrefs = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
+    if (!ref.read(authProvider).authenticated) {
+      if (mounted) setState(() => _notificationsLoading = false);
+      return;
+    }
+    final api = ref.read(apiClientProvider);
+    final config = await api.getNotificationConfig();
+    final prefs = await api.getNotificationPrefs();
+    if (!mounted) return;
+    setState(() {
+      _config = config;
+      _prefs = prefs;
+      _notificationsLoading = false;
+    });
+  }
+
+  Future<void> _savePrefs(NotificationPrefs next) async {
+    final previous = _prefs;
+    setState(() {
+      _prefs = next;
+      _savingPrefs = true;
+    });
+    try {
+      final saved = await ref.read(apiClientProvider).updateNotificationPrefs(next);
+      if (mounted) setState(() => _prefs = saved);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _prefs = previous);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save notification settings')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingPrefs = false);
+    }
+  }
+
+  Future<void> _toggleNewPosts(bool value) async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    await _savePrefs(prefs.copyWith(newPosts: value));
+  }
+
+  Future<void> _togglePush(bool value) async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    if (!value) {
+      await _savePrefs(prefs.copyWith(push: false));
+      return;
+    }
+    final granted = await ref.read(pushServiceProvider).requestPermission();
+    if (!granted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Allow notifications for RedChef in Android settings to receive push messages.')),
+        );
+      }
+      // Without the OS permission push cannot work, so keep the stored
+      // preference in line with reality.
+      await _savePrefs(prefs.copyWith(push: false));
+      return;
+    }
+    await _savePrefs(prefs.copyWith(push: true));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +122,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             ),
           ),
           const SizedBox(height: 12),
+          if (auth.authenticated) ...[
+            _buildNotificationsCard(context),
+            const SizedBox(height: 12),
+          ],
           ListTile(leading: const Icon(Icons.restaurant_outlined), title: const Text('Admin posts'), subtitle: const Text('Drafts & published (admin only)'), enabled: auth.isAdmin, onTap: auth.isAdmin ? () => context.push('/admin/posts') : null),
           ListTile(leading: const Icon(Icons.key_outlined), title: const Text('API tokens'), subtitle: const Text('Create, rotate, revoke'), onTap: () => context.push('/tokens')),
           const Divider(),
@@ -67,6 +148,84 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       ),
     ),
   );
+  }
+
+  Widget _buildNotificationsCard(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final config = _config;
+    final prefs = _prefs;
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800);
+    final hintStyle = Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
+
+    final Widget body;
+    if (_notificationsLoading) {
+      body = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: LinearProgressIndicator(minHeight: 2),
+      );
+    } else if (config == null || !config.enabled) {
+      body = Text('Notifications are turned off on this server.', style: hintStyle);
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: prefs?.newPosts ?? true,
+            onChanged: (_savingPrefs || prefs == null || !config.newPostEnabled) ? null : _toggleNewPosts,
+            title: const Text('New posts'),
+            subtitle: Text(
+              config.newPostEnabled
+                  ? 'Notify me when a new post is published'
+                  : 'New post notifications are turned off on this server.',
+            ),
+          ),
+          ValueListenableBuilder<PushState>(
+            valueListenable: ref.watch(pushServiceProvider).state,
+            builder: (context, pushState, _) {
+              final serverReady = config.fcmEnabled;
+              final deviceReady = pushState.firebaseAvailable;
+              final canToggle = serverReady && deviceReady && !_savingPrefs && prefs != null;
+              final String subtitle;
+              if (!serverReady) {
+                subtitle = 'Push is not configured on this server.';
+              } else if (!deviceReady) {
+                subtitle = 'Push is not available in this build.';
+              } else if (pushState.permissionDenied) {
+                subtitle = 'Blocked in Android settings — allow notifications for RedChef.';
+              } else {
+                subtitle = 'Receive new posts as Android notifications.';
+              }
+              return SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: (prefs?.push ?? false) && serverReady && deviceReady,
+                onChanged: canToggle ? _togglePush : null,
+                title: const Text('Push notifications'),
+                subtitle: Text(subtitle),
+              );
+            },
+          ),
+        ],
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.notifications_outlined, color: scheme.primary),
+              const SizedBox(width: 8),
+              Text('Notifications', style: titleStyle),
+            ]),
+            const SizedBox(height: 4),
+            body,
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _open(String url) async {

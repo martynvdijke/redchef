@@ -298,6 +298,51 @@
       color: var(--gray);
     }
 
+    /* Notification settings */
+    .btn-secondary-admin {
+      padding: 11px 18px;
+      background: transparent;
+      border: 1px solid #555;
+      border-radius: 8px;
+      color: var(--white);
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary-admin:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .btn-secondary-admin:focus-visible,
+    .checkbox-group input:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 2px;
+    }
+
+    .helper-note {
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    .helper-note code {
+      background: #222;
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 0.95em;
+    }
+
+    .settings-status {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      min-height: 1.5rem;
+    }
+
     /* ========== LIGHT MODE ========== */
     body.light-mode {
       background: #f5f5f0;
@@ -362,6 +407,20 @@
     body.light-mode .btn-test-email {
       background: #ddd !important;
       color: #333 !important;
+    }
+    body.light-mode .btn-secondary-admin {
+      border-color: #ccc;
+      color: #333;
+    }
+    body.light-mode .btn-secondary-admin:hover {
+      border-color: var(--red);
+      color: var(--red);
+    }
+    body.light-mode .helper-note {
+      color: #666;
+    }
+    body.light-mode .helper-note code {
+      background: #eee;
     }
     body.light-mode .links-item {
       border-bottom-color: #e0e0e0;
@@ -609,6 +668,82 @@
           <button type="submit" class="btn-primary" style="background:var(--copper);flex:1;">Save Email Settings</button>
         </div>
         <div class="upload-status" id="email-settings-status"></div>
+      </form>
+    </div>
+
+    <!-- Notification Settings -->
+    <div class="upload-section" id="notifications-section">
+      <h2>🔔 Notifications</h2>
+      <form id="notifications-form">
+        <div class="form-row">
+          <div class="full form-group">
+            <div class="checkbox-group" style="margin-top:0;">
+              <input type="checkbox" id="notif-enabled">
+              <label for="notif-enabled">Notifications are enabled on this site</label>
+            </div>
+            <div class="checkbox-group" style="margin-top:8px;">
+              <input type="checkbox" id="notif-new-post-enabled">
+              <label for="notif-new-post-enabled">Send a notification when a new post is published</label>
+            </div>
+            <p class="helper-note">The master switch silences every channel. The new-post switch only decides whether publishing a post triggers anything.</p>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:1rem;border-top:1px solid #333;padding-top:1rem;">
+          <div class="full form-group">
+            <div class="checkbox-group" style="margin-top:0;">
+              <input type="checkbox" id="notif-web-push-enabled">
+              <label for="notif-web-push-enabled">Enable Web Push (browser notifications)</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>VAPID Subject <small>(mailto: or https URL)</small></label>
+            <input type="text" id="notif-vapid-subject" placeholder="mailto:admin@example.com" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="form-group">
+            <label>VAPID Public Key</label>
+            <input type="text" id="notif-vapid-public" placeholder="BEl..." autocomplete="off" spellcheck="false">
+          </div>
+          <div class="full form-group">
+            <label>VAPID Private Key</label>
+            <input type="password" id="notif-vapid-private" placeholder="Private key" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="full form-group">
+            <button type="button" class="btn-secondary-admin" id="btn-generate-vapid">Generate VAPID keys</button>
+            <p class="helper-note">Keys are saved to the database immediately. Browsers that already subscribed must re-enable notifications after a key change.</p>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:1rem;border-top:1px solid #333;padding-top:1rem;">
+          <div class="full form-group">
+            <div class="checkbox-group" style="margin-top:0;">
+              <input type="checkbox" id="notif-fcm-enabled">
+              <label for="notif-fcm-enabled">Enable Android push (Firebase Cloud Messaging)</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>FCM Project ID</label>
+            <input type="text" id="notif-fcm-project-id" placeholder="my-project-1234" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="form-group">
+            <label>FCM Client Email</label>
+            <input type="text" id="notif-fcm-client-email" placeholder="firebase-adminsdk@my-project.iam.gserviceaccount.com" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="full form-group">
+            <label>FCM Private Key <small>(PEM)</small></label>
+            <textarea id="notif-fcm-private-key" rows="4" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" spellcheck="false"></textarea>
+          </div>
+          <div class="full form-group">
+            <button type="button" class="btn-secondary-admin" id="btn-paste-service-account">Paste service account JSON</button>
+            <p class="helper-note">Paste the whole service account file from the Firebase console. The project id, client email and private key are filled in for you; the Android app still needs its own <code>google-services.json</code>.</p>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:1rem;flex-wrap:wrap;">
+          <button type="submit" class="btn-primary" style="background:var(--copper);flex:1;">Save Notification Settings</button>
+          <button type="button" class="btn-primary" id="btn-test-notification" style="background:#555;flex:0 0 auto;padding:14px 24px;white-space:nowrap;">🔔 Send test notification</button>
+        </div>
+        <div class="settings-status" id="notifications-status" role="status" aria-live="polite"></div>
       </form>
     </div>
 

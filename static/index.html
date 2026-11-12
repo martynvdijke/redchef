@@ -21,6 +21,17 @@
     <div class="nav-auth" id="nav-auth">
       <button class="nav-auth-btn nav-auth-btn-outline" id="btn-login" style="display:none;">Sign In</button>
       <button class="nav-auth-btn" id="btn-register" style="display:none;">Join</button>
+      <div class="notif-wrap" id="notif-wrap" style="display:none;">
+        <button type="button" class="notif-bell" id="btn-notifications"
+                aria-label="Notifications" aria-haspopup="dialog" aria-expanded="false" aria-controls="notif-panel">
+          <svg class="notif-bell-glyph" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+            <path d="M12 3.25a6 6 0 0 0-6 6v3.4l-1.3 2.6a1 1 0 0 0 .9 1.45h12.8a1 1 0 0 0 .9-1.45L18 12.65v-3.4a6 6 0 0 0-6-6Z"
+                  fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            <path d="M9.7 19.1a2.4 2.4 0 0 0 4.6 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+          </svg>
+          <span class="notif-badge" id="notif-badge" hidden>0</span>
+        </button>
+      </div>
       <div class="nav-user" id="nav-user" style="display:none;">
         <span class="nav-user-email" id="nav-email"></span>
         <span class="nav-user-badge nav-user-badge-paid" id="nav-paid-badge" style="display:none;">👑 Member</span>
@@ -30,6 +41,20 @@
       </div>
     </div>
   </nav>
+
+  <!-- Notifications panel (toggled by the bell; always inert when notifications are disabled) -->
+  <div class="notif-panel" id="notif-panel" role="dialog" aria-modal="false" aria-label="Notifications" tabindex="-1" hidden>
+    <div class="notif-panel-head">
+      <h3 class="notif-panel-title">Notifications</h3>
+      <button type="button" class="notif-mark-all" id="notif-mark-all" aria-disabled="true">Mark all read</button>
+    </div>
+    <div class="notif-list" id="notif-list">
+      <div class="notif-empty">
+        <span class="notif-empty-title">Nothing here yet</span>
+        <span class="notif-empty-desc">New posts from the Chef will land here.</span>
+      </div>
+    </div>
+  </div>
 
   <!-- Cover Banner -->
   <div class="cover-banner"></div>
@@ -254,6 +279,39 @@
         </div>
       </div>
 
+      <!-- Notifications (hidden entirely when the server has notifications switched off) -->
+      <div class="profile-notif" id="profile-notif" style="display:none;">
+        <h3 class="profile-notif-title">Notifications</h3>
+        <p class="profile-notif-hint">Choose what the Chef tells you about.</p>
+
+        <label class="pref-row" for="pref-new-posts">
+          <input type="checkbox" id="pref-new-posts">
+          <span class="pref-row-text">
+            <span class="pref-row-label">New posts</span>
+            <span class="pref-row-desc">Alerts in the app and on your devices when a recipe drops</span>
+          </span>
+        </label>
+
+        <label class="pref-row" for="pref-push">
+          <input type="checkbox" id="pref-push">
+          <span class="pref-row-text">
+            <span class="pref-row-label">Push notifications</span>
+            <span class="pref-row-desc">Send to this browser and to the Android app</span>
+          </span>
+        </label>
+
+        <label class="pref-row" for="pref-email">
+          <input type="checkbox" id="pref-email">
+          <span class="pref-row-text">
+            <span class="pref-row-label">Email</span>
+            <span class="pref-row-desc">An email for every new post</span>
+          </span>
+        </label>
+
+        <button type="button" class="profile-notif-btn" id="btn-enable-web-push" hidden>Enable browser notifications</button>
+        <p class="profile-notif-status" id="pref-status" role="status" aria-live="polite"></p>
+      </div>
+
       <div style="text-align:left;border-top:1px solid #2a2a2a;padding-top:18px;">
         <h3 style="margin:0 0 6px;font-size:1.05rem;">🔑 Public API Access</h3>
         <p class="auth-subtitle" style="text-align:left;margin-bottom:12px;">Generate an API token to use the public API from scripts and external apps. Not needed for comments, likes, or payments here.</p>
@@ -271,6 +329,17 @@
         </div>
         <div id="token-list" style="margin-top:16px;"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Notification toast (new-post events; announced by screen readers) -->
+  <div class="notif-toast-region" id="notif-toast-region" role="status" aria-live="polite" aria-atomic="true">
+    <div class="notif-toast" id="notif-toast" hidden>
+      <a class="notif-toast-link" id="notif-toast-link" href="/">
+        <span class="notif-toast-title" id="notif-toast-title"></span>
+        <span class="notif-toast-body" id="notif-toast-body"></span>
+      </a>
+      <button type="button" class="notif-toast-close" id="notif-toast-close" aria-label="Dismiss notification">✕</button>
     </div>
   </div>
 

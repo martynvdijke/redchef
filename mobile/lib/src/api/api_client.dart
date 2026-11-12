@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import '../auth/storage.dart';
+import 'models.dart';
 
 /// Hosted RedChef instance offered on first run. Users can still point the app
 /// at their own self-hosted server from onboarding.
@@ -142,6 +143,52 @@ class ApiClient {
     if (data is String) return data;
     if (data is Map || data is List) return jsonEncode(data);
     return data?.toString() ?? '';
+  }
+
+  /// Public notification configuration. A server without the notifications
+  /// feature (404) or an unreachable host reports everything disabled.
+  Future<NotificationConfig> getNotificationConfig() async {
+    try {
+      final r = await dio.get('/api/notifications/config', options: Options(validateStatus: (_) => true));
+      if (r.statusCode == 200 && r.data is Map) {
+        return NotificationConfig.fromJson((r.data as Map).cast<String, dynamic>());
+      }
+    } catch (_) {}
+    return const NotificationConfig();
+  }
+
+  /// The signed-in user's notification preferences; server defaults (all on)
+  /// when the endpoint is unavailable.
+  Future<NotificationPrefs> getNotificationPrefs() async {
+    try {
+      final r = await dio.get('/api/notifications/preferences', options: Options(validateStatus: (_) => true));
+      if (r.statusCode == 200 && r.data is Map) {
+        return NotificationPrefs.fromJson((r.data as Map).cast<String, dynamic>());
+      }
+    } catch (_) {}
+    return const NotificationPrefs();
+  }
+
+  /// Persists [prefs] and returns what the server stored.
+  Future<NotificationPrefs> updateNotificationPrefs(NotificationPrefs prefs) async {
+    final r = await dio.put('/api/notifications/preferences', data: prefs.toJson());
+    if (r.data is Map) {
+      return NotificationPrefs.fromJson((r.data as Map).cast<String, dynamic>());
+    }
+    return prefs;
+  }
+
+  /// Registers an FCM device token for the signed-in user (upsert per token).
+  Future<void> registerDeviceToken(String token, {String platform = 'android'}) async {
+    if (token.trim().isEmpty) return;
+    await dio.post('/api/notifications/devices', data: {'token': token, 'platform': platform});
+  }
+
+  /// Removes an FCM device token, e.g. on logout so the device stops receiving
+  /// the previous user's push messages.
+  Future<void> unregisterDeviceToken(String token) async {
+    if (token.trim().isEmpty) return;
+    await dio.delete('/api/notifications/devices', data: {'token': token});
   }
 
   String resolveMedia(String? mediaUrl) {

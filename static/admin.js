@@ -10,6 +10,9 @@ const API = {
   settings: '/api/admin/settings/analytics',
   emailSettings: '/api/admin/settings/email',
   profile: '/api/admin/settings/profile',
+  notificationSettings: '/api/admin/settings/notifications',
+  notificationTest: '/api/admin/settings/notifications/test',
+  notificationVapid: '/api/admin/settings/notifications/vapid',
   setupStatus: '/api/setup/status',
   postsSimple: '/api/admin/posts/simple',
 };
@@ -82,6 +85,7 @@ function showDashboard() {
   loadComments();
   loadSettings();
   loadEmailSettings();
+  loadNotificationSettings();
   loadProfile();
 }
 
@@ -183,8 +187,8 @@ function handleUpload(e) {
   xhr.open('POST', API.upload, true);
 
   // Lifecycle: visibility + optional schedule
-  const status = document.getElementById('upload-status').value;
-  if (status) formData.append('status', status);
+  const statusValue = document.getElementById('upload-status').value;
+  if (statusValue) formData.append('status', statusValue);
   const scheduled = document.getElementById('upload-scheduled').value;
   if (scheduled) formData.append('scheduled_at', scheduled);
 
@@ -712,6 +716,170 @@ async function handleTestEmail() {
   }
 }
 
+// ── Notification Settings ──
+
+function setNotificationsStatus(message, color) {
+  const status = document.getElementById('notifications-status');
+  if (!status) return;
+  status.textContent = message || '';
+  status.style.color = color || '#888';
+}
+
+function setChecked(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.checked = !!value;
+}
+
+function setValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value == null ? '' : value;
+}
+
+async function loadNotificationSettings() {
+  try {
+    const res = await fetch(API.notificationSettings);
+    if (!res.ok) return;
+    const s = await res.json();
+
+    // Booleans: the master switches default to on (the database default),
+    // Web Push and FCM default to off.
+    setChecked('notif-enabled', s.enabled !== false);
+    setChecked('notif-new-post-enabled', s.new_post_enabled !== false);
+    setChecked('notif-web-push-enabled', s.web_push_enabled === true);
+    setChecked('notif-fcm-enabled', s.fcm_enabled === true);
+
+    setValue('notif-vapid-subject', s.vapid_subject);
+    setValue('notif-vapid-public', s.vapid_public_key);
+    setValue('notif-vapid-private', s.vapid_private_key);
+    setValue('notif-fcm-project-id', s.fcm_project_id);
+    setValue('notif-fcm-client-email', s.fcm_client_email);
+    setValue('notif-fcm-private-key', s.fcm_private_key);
+  } catch (_) {
+    setNotificationsStatus('Could not load notification settings.', '#D42B2B');
+  }
+}
+
+async function handleSaveNotificationSettings(e) {
+  e.preventDefault();
+  setNotificationsStatus('Saving…', '#F5C518');
+
+  try {
+    const res = await fetch(API.notificationSettings, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        enabled: document.getElementById('notif-enabled').checked,
+        new_post_enabled: document.getElementById('notif-new-post-enabled').checked,
+        web_push_enabled: document.getElementById('notif-web-push-enabled').checked,
+        fcm_enabled: document.getElementById('notif-fcm-enabled').checked,
+        vapid_subject: document.getElementById('notif-vapid-subject').value.trim(),
+        vapid_public_key: document.getElementById('notif-vapid-public').value.trim(),
+        vapid_private_key: document.getElementById('notif-vapid-private').value.trim(),
+        fcm_project_id: document.getElementById('notif-fcm-project-id').value.trim(),
+        fcm_client_email: document.getElementById('notif-fcm-client-email').value.trim(),
+        fcm_private_key: document.getElementById('notif-fcm-private-key').value.trim(),
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setNotificationsStatus(data.error || 'Failed to save notification settings.', '#D42B2B');
+      return;
+    }
+
+    setNotificationsStatus('Notification settings saved.', '#4CAF50');
+  } catch (_) {
+    setNotificationsStatus('Network error', '#D42B2B');
+  }
+}
+
+async function handleTestNotification() {
+  setNotificationsStatus('Sending test notification…', '#F5C518');
+
+  try {
+    const res = await fetch(API.notificationTest, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setNotificationsStatus(data.error || 'Test notification failed.', '#D42B2B');
+      return;
+    }
+    const realtime = data.realtime || 0;
+    const webPush = data.web_push || 0;
+    const android = data.android || 0;
+    const parts = [
+      'realtime: ' + realtime,
+      'web push: ' + webPush,
+      'android: ' + android,
+    ];
+    setNotificationsStatus('Test sent — ' + parts.join(' · '), '#4CAF50');
+
+    if (realtime === 0 && webPush === 0 && android === 0) {
+      setNotificationsStatus(
+        'Test sent, but nothing was delivered. Check that a browser subscription or Android device exists, and that the channels are enabled.',
+        '#F5C518'
+      );
+    }
+  } catch (_) {
+    setNotificationsStatus('Network error', '#D42B2B');
+  }
+}
+
+async function handleGenerateVapid() {
+  if (!confirm('Generate a new VAPID keypair? Existing browser subscriptions will stop working until users re-enable notifications.')) {
+    return;
+  }
+  setNotificationsStatus('Generating VAPID keys…', '#F5C518');
+
+  try {
+    const res = await fetch(API.notificationVapid, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setNotificationsStatus(data.error || 'Could not generate VAPID keys.', '#D42B2B');
+      return;
+    }
+    setValue('notif-vapid-public', data.vapid_public_key);
+    setValue('notif-vapid-private', data.vapid_private_key);
+    setChecked('notif-web-push-enabled', true);
+    setNotificationsStatus('New VAPID keys generated and saved. Review the subject, then save.', '#4CAF50');
+  } catch (_) {
+    setNotificationsStatus('Network error', '#D42B2B');
+  }
+}
+
+// Fill the FCM fields from a pasted Firebase service account JSON blob.
+function handlePasteServiceAccount() {
+  const raw = prompt('Paste the Firebase service account JSON:');
+  if (raw === null) return;
+  if (!raw.trim()) return;
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (_) {
+    setNotificationsStatus('That does not look like valid JSON.', '#D42B2B');
+    return;
+  }
+
+  const projectId = data.project_id || '';
+  const clientEmail = data.client_email || '';
+  const privateKey = data.private_key || '';
+
+  if (!clientEmail || !privateKey) {
+    setNotificationsStatus('The JSON is missing client_email or private_key.', '#D42B2B');
+    return;
+  }
+
+  setValue('notif-fcm-project-id', projectId);
+  setValue('notif-fcm-client-email', clientEmail);
+  setValue('notif-fcm-private-key', privateKey);
+  setChecked('notif-fcm-enabled', true);
+
+  setNotificationsStatus(
+    'Service account loaded. The private key is stored as-is; the server accepts both real newlines and literal \\n. Save to apply.',
+    '#4CAF50'
+  );
+}
+
 // ── Linked Posts Management ──
 
 let currentLinksPostId = null;
@@ -873,6 +1041,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('email-settings-form').addEventListener('submit', handleSaveEmailSettings);
   document.getElementById('profile-form').addEventListener('submit', handleSaveProfile);
   document.getElementById('btn-test-email').addEventListener('click', handleTestEmail);
+  document.getElementById('notifications-form').addEventListener('submit', handleSaveNotificationSettings);
+  document.getElementById('btn-test-notification').addEventListener('click', handleTestNotification);
+  document.getElementById('btn-generate-vapid').addEventListener('click', handleGenerateVapid);
+  document.getElementById('btn-paste-service-account').addEventListener('click', handlePasteServiceAccount);
   document.getElementById('edit-form').addEventListener('submit', handleEditSubmit);
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
   initTheme();
